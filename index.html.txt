@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>DisplayWolf Dashboard</title>
+  <style>
+    :root {
+      --bg-color: #09090b;
+      --card-bg: #18181b;
+      --accent-color: #0284c7;
+      --accent-glow: #38bdf8;
+      --text-main: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --border-color: #27272a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      padding: 20px 15px;
+      min-height: 100vh;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Header e Stato */
+    header {
+      background: var(--card-bg);
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--text-main);
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: #000;
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--danger);
+      box-shadow: 0 0 8px var(--danger);
+    }
+
+    .status-dot.connected {
+      background-color: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    /* Pulsanti di Connessione */
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    button {
+      background: var(--accent-color);
+      color: #fff;
+      border: none;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    button:disabled {
+      background: var(--border-color);
+      color: var(--text-muted);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-danger {
+      background: #3f3f46;
+      color: var(--text-main);
+    }
+
+    /* Card Angolo di Piega */
+    .gauge-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 24px 16px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .gauge-card::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(2, 132, 199, 0.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .gauge-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .gauge-value-container {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 4px;
+      margin: 10px 0;
+    }
+
+    .gauge-value {
+      font-size: 4.5rem;
+      font-weight: 900;
+      color: var(--accent-glow);
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .gauge-unit {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent-glow);
+    }
+
+    /* Pannello Controllo e Comandi */
+    .control-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .input-wrapper {
+      display: flex;
+      gap: 8px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: #000;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px;
+      color: #fff;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent-color);
+    }
+
+    /* Quick Action Buttons */
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .btn-quick {
+      background: #27272a;
+      border: 1px solid var(--border-color);
+      font-size: 0.8rem;
+      padding: 10px;
+    }
+
+    /* Console Log */
+    .log-card {
+      background: #000;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: var(--success);
+      height: 90px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Header -->
+    <header>
+      <h1>DisplayWolf</h1>
+      <div class="status-badge">
+        <div id="status-dot" class="status-dot"></div>
+        <span id="status-text">Disconnesso</span>
+      </div>
+    </header>
+
+    <!-- Connessione -->
+    <div class="btn-group">
+      <button id="btn-connect" onclick="connectBLE()">Connetti BLE</button>
+      <button id="btn-disconnect" onclick="disconnectBLE()" class="btn-danger" disabled>Disconnetti</button>
+    </div>
+
+    <!-- Valore Angolo di Piega -->
+    <div class="gauge-card">
+      <div class="gauge-title">Max Angolo di Piega</div>
+      <div class="gauge-value-container">
+        <span id="lean-value" class="gauge-value">0</span>
+        <span class="gauge-unit">°</span>
+      </div>
+    </div>
+
+    <!-- Invio Parametri -->
+    <div class="control-card">
+      <div class="gauge-title">Invia Comando</div>
+      <div class="input-wrapper">
+        <input type="text" id="cmd-input" placeholder="Es. RESET, SET:45..." disabled />
+        <button id="btn-send" onclick="sendCommand()" disabled>Invia</button>
+      </div>
+      
+      <!-- Pulsanti rapidi di esempio -->
+      <div class="quick-actions">
+        <button class="btn-quick" onclick="sendQuickCmd('RESET')" disabled class="btn-cmd">Reset Piega</button>
+        <button class="btn-quick" onclick="sendQuickCmd('GET_DATA')" disabled class="btn-cmd">Scarica Dati</button>
+        <button class="btn-quick" onclick="sendQuickCmd('PING')" disabled class="btn-cmd">Ping</button>
+      </div>
+    </div>
+
+    <!-- Terminale Log -->
+    <div id="log-output" class="log-card">Pronto per la connessione...</div>
+
+  </div>
+
+  <script>
+    // Configura con gli UUID reali del tuo microcontrollore
+    const SERVICE_UUID     = '0000180d-0000-1000-8000-00805f9b34fb';
+    const CHAR_READ_UUID   = '00002a37-0000-1000-8000-00805f9b34fb'; // Ricezione Dati / Piega
+    const CHAR_WRITE_UUID  = '00002a39-0000-1000-8000-00805f9b34fb'; // Invio Comandi
+
+    let bleDevice = null;
+    let writeChar = null;
+
+    function log(text) {
+      const logEl = document.getElementById('log-output');
+      logEl.innerText += '\n> ' + text;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function connectBLE() {
+      if (!navigator.bluetooth) {
+        alert("Web Bluetooth non è supportato. Su iOS scarica e apri questa pagina con l'app Bluefy!");
+        return;
+      }
+
+      try {
+        log("Ricerca del display in corso...");
+        bleDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [SERVICE_UUID]
+        });
+
+        log("Connessione a " + bleDevice.name + "...");
+        const server = await bleDevice.gatt.connect();
+
+        log("Ottengo i servizi...");
+        const service = await server.getPrimaryService(SERVICE_UUID);
+
+        // Configura ascolto notifiche per l'angolo di piega
+        const readChar = await service.getCharacteristic(CHAR_READ_UUID);
+        await readChar.startNotifications();
+        readChar.addEventListener('characteristicvaluechanged', handleDataReceived);
+
+        // Configura scrittura comandi
+        writeChar = await service.getCharacteristic(CHAR_WRITE_UUID);
+
+        // Aggiorna Grafica
+        setUIConnected(true);
+        log("Connesso al Display!");
+
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+      } catch (err) {
+        log("Errore: " + err.message);
+      }
+    }
+
+    function handleDataReceived(event) {
+      const decoder = new TextDecoder('utf-8');
+      const data = decoder.decode(event.target.value);
+      
+      // Se ricevi un numero, aggiorna il valore visivo
+      const parsedValue = parseFloat(data);
+      if (!isNaN(parsedValue)) {
+        document.getElementById('lean-value').innerText = parsedValue;
+      }
+      log("Ricevuto: " + data);
+    }
+
+    async function sendCommand() {
+      const input = document.getElementById('cmd-input');
+      if (input.value) {
+        await sendQuickCmd(input.value);
+        input.value = '';
+      }
+    }
+
+    async function sendQuickCmd(cmdStr) {
+      if (!writeChar) return;
+      try {
+        const encoder = new TextEncoder();
+        await writeChar.writeValue(encoder.encode(cmdStr));
+        log("Inviato: " + cmdStr);
+      } catch (err) {
+        log("Errore invio: " + err.message);
+      }
+    }
+
+    async function disconnectBLE() {
+      if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+      }
+    }
+
+    function onDisconnected() {
+      setUIConnected(false);
+      log("Dispositivo disconnesso.");
+    }
+
+    function setUIConnected(connected) {
+      document.getElementById('status-dot').className = connected ? 'status-dot connected' : 'status-dot';
+      document.getElementById('status-text').innerText = connected ? 'Connesso' : 'Disconnesso';
+      
+      document.getElementById('btn-connect').disabled = connected;
+      document.getElementById('btn-disconnect').disabled = !connected;
+      document.getElementById('cmd-input').disabled = !connected;
+      document.getElementById('btn-send').disabled = !connected;
+
+      const quickBtns = document.querySelectorAll('.quick-actions button');
+      quickBtns.forEach(btn => btn.disabled = !connected);
+
+      if (!connected) {
+        document.getElementById('lean-value').innerText = '0';
+      }
+    }
+  </script>
+</body>
+</html>
