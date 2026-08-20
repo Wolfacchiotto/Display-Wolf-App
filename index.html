@@ -614,30 +614,64 @@
       }
     }
 
-    function handleDataReceived(event) {
-      const decoder = new TextDecoder('utf-8');
-      const rawData = decoder.decode(event.target.value).trim();
+  function handleDataReceived(event) {
+  const decoder = new TextDecoder('utf-8');
+  const rawData = decoder.decode(event.target.value).trim();
+  log("Ricevuto: " + rawData);
 
-      // Riconoscimento pacchetto LAP (es. "LAP:1:24.35" oppure millisecondi "LAPMS:84350")
-      if (rawData.startsWith("LAPMS:")) {
-        const ms = parseInt(rawData.replace("LAPMS:", ""));
-        recordLap(ms);
-        return;
-      } else if (rawData.startsWith("LAP:")) {
-        const timeStr = rawData.replace("LAP:", "");
-        document.getElementById('last-lap').innerText = timeStr;
-        log("Giro ricevuto: " + timeStr);
-        return;
-      }
+  // 1. Prova prima a fare il parse come JSON
+  try {
+    const data = JSON.parse(rawData);
 
-      const parsedValue = parseFloat(rawData);
-
-      if (!isNaN(parsedValue)) {
-        updateGauge(parsedValue);
-        processLeanData(parsedValue);
-      }
-      log("Ricevuto: " + rawData);
+    // Gestione Max DX e Max SX
+    if (data.maxDX !== undefined) {
+      maxRight = data.maxDX;
+      document.getElementById('max-right').innerText = maxRight;
     }
+    if (data.maxSX !== undefined) {
+      maxLeft = data.maxSX;
+      document.getElementById('max-left').innerText = maxLeft;
+    }
+
+    // Gestione Tempi sul Giro (lastLap e bestLap)
+    if (data.lastLap) {
+      document.getElementById('last-lap').innerText = data.lastLap;
+    }
+    if (data.bestLap) {
+      document.getElementById('best-lap').innerText = data.bestLap;
+    }
+
+    // Gestione Inclinazione/Piega Istantanea (se inviata nel JSON, es. "lean")
+    if (data.lean !== undefined) {
+      updateGauge(data.lean);
+      processLeanData(data.lean);
+    }
+
+    saveLocalData();
+    return; // Se è un JSON valido, l'elaborazione finisce qui
+  } catch (e) {
+    // Se non è un JSON, prosegui con i controlli per stringhe semplici
+  }
+
+  // 2. Gestione dei messaggi legacy o comandi singoli
+  if (rawData.startsWith("LAPMS:")) {
+    const ms = parseInt(rawData.replace("LAPMS:", ""));
+    recordLap(ms);
+    return;
+  } else if (rawData.startsWith("LAP:")) {
+    const timeStr = rawData.replace("LAP:", "");
+    document.getElementById('last-lap').innerText = timeStr;
+    log("Giro ricevuto: " + timeStr);
+    return;
+  }
+
+  // 3. Fallback per valore numerico singolo dell'inclinazione
+  const parsedValue = parseFloat(rawData);
+  if (!isNaN(parsedValue)) {
+    updateGauge(parsedValue);
+    processLeanData(parsedValue);
+  }
+}
 
     function updateGauge(val) {
       document.getElementById('lean-value').innerText = Math.abs(val);
