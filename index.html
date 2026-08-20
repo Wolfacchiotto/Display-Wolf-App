@@ -1,11 +1,9 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>DisplayWolf Dashboard Pro</title>
-  <!-- Chart.js per il grafico in tempo reale -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --bg-color: #09090b;
@@ -308,13 +306,47 @@
       margin-top: 4px;
     }
 
-    /* Grafico Card */
-    .chart-card {
+    /* Card Storico Giri */
+    .history-card {
       background: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 16px;
       padding: 14px;
-      height: 180px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .history-table-container {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    th {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    td {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(39, 39, 42, 0.5);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .empty-row td {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 16px 0;
     }
 
     /* Control Panel & Controls */
@@ -346,25 +378,6 @@
 
     input[type="text"]:focus {
       border-color: var(--accent-color);
-    }
-
-    .quick-actions {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-    }
-
-    .btn-quick {
-      background: #27272a;
-      border: 1px solid var(--border-color);
-      font-size: 0.75rem;
-      padding: 8px;
-    }
-
-    .session-actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
     }
 
     /* Console Log */
@@ -441,28 +454,30 @@
       </div>
     </div>
 
-    <!-- Grafico In Real-Time -->
-    <div class="chart-card">
-      <canvas id="leanChart"></canvas>
+    <!-- Storico Ultimi Giri -->
+    <div class="history-card">
+      <div class="gauge-title">Storico Ultimi Giri</div>
+      <div class="history-table-container">
+        <table id="laps-history-table">
+          <thead>
+            <tr>
+              <th>Giro</th>
+              <th>Tempo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="empty-row"><td colspan="2">Nessun giro registrato</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Invio Parametri e Comandi -->
     <div class="control-card">
       <div class="gauge-title">Invia Comando</div>
       <div class="input-wrapper">
-        <input type="text" id="cmd-input" placeholder="Es. LAP, RESET, SET:45..." disabled />
+        <input type="text" id="cmd-input" placeholder="Invia comando..." disabled />
         <button id="btn-send" onclick="sendCommand()" disabled>Invia</button>
-      </div>
-      
-      <div class="quick-actions">
-        <button class="btn-quick" onclick="triggerManualLap()" id="btn-lap">⏱️ Nuovo Giro</button>
-        <button class="btn-quick" onclick="sendQuickCmd('RESET')" disabled>Reset Piega</button>
-        <button class="btn-quick" onclick="sendQuickCmd('GET_DATA')" disabled>Scarica Dati</button>
-      </div>
-
-      <div class="session-actions">
-        <button class="btn-quick" onclick="resetMaxValues()">Azzera Dati</button>
-        <button class="btn-quick" onclick="exportCSV()">Esporta CSV</button>
       </div>
     </div>
 
@@ -483,46 +498,7 @@
 
     let maxLeft = 0;
     let maxRight = 0;
-    let lastLapTime = null; // in ms
-    let bestLapTime = null; // in ms
-    let lapStartTime = Date.now();
-    let lapHistory = [];
-
-    let sessionHistory = []; // { timestamp, value }
-
-    // Inizializzazione Grafico Chart.js
-    const ctx = document.getElementById('leanChart').getContext('2d');
-    const leanChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Angolo Piega (°)',
-          data: [],
-          borderColor: '#38bdf8',
-          borderWidth: 2,
-          pointRadius: 0,
-          tension: 0.3,
-          fill: true,
-          backgroundColor: 'rgba(56, 189, 248, 0.1)'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { display: false },
-          y: {
-            min: -60,
-            max: 60,
-            grid: { color: '#27272a' },
-            ticks: { color: '#a1a1aa', font: { size: 10 } }
-          }
-        },
-        plugins: { legend: { display: false } },
-        animation: false
-      }
-    });
+    let lapsHistory = []; // max 10 giri
 
     function log(text) {
       const logEl = document.getElementById('log-output');
@@ -530,41 +506,42 @@
       logEl.scrollTop = logEl.scrollHeight;
     }
 
-    function formatTime(ms) {
-      if (!ms) return "--:--.--";
-      const totalSec = ms / 1000;
-      const min = Math.floor(totalSec / 60);
-      const sec = Math.floor(totalSec % 60);
-      const millis = Math.floor((ms % 1000) / 10);
-      
-      const pad = (n) => (n < 10 ? "0" + n : n);
-      return `${pad(min)}:${pad(sec)}.${pad(millis)}`;
-    }
+    function addLapToHistory(lapTimeString) {
+      if (!lapTimeString || lapTimeString === "--:--.--" || lapTimeString === "00:00.000") return;
 
-    function recordLap(msTime) {
-      if (!msTime || msTime < 5000) return; // Ignora se sotto i 5 secondi
-
-      lastLapTime = msTime;
-      document.getElementById('last-lap').innerText = formatTime(lastLapTime);
-
-      if (!bestLapTime || lastLapTime < bestLapTime) {
-        bestLapTime = lastLapTime;
-        document.getElementById('best-lap').innerText = formatTime(bestLapTime);
-        log(" nuovo BEST LAP: " + formatTime(bestLapTime));
-      } else {
-        log("Giro completato: " + formatTime(lastLapTime));
+      // Evita duplicati consecutivi
+      if (lapsHistory.length > 0 && lapsHistory[0] === lapTimeString) {
+        return;
       }
 
-      lapHistory.push({ lap: lapHistory.length + 1, time: formatTime(lastLapTime), ms: lastLapTime });
+      lapsHistory.unshift(lapTimeString);
+
+      if (lapsHistory.length > 10) {
+        lapsHistory.pop();
+      }
+
+      updateLapsHistoryUI();
       saveLocalData();
     }
 
-    function triggerManualLap() {
-      const now = Date.now();
-      const elapsed = now - lapStartTime;
-      recordLap(elapsed);
-      lapStartTime = now;
-      sendQuickCmd('LAP');
+    function updateLapsHistoryUI() {
+      const tbody = document.querySelector('#laps-history-table tbody');
+      if (!tbody) return;
+
+      if (lapsHistory.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="2">Nessun giro registrato</td></tr>';
+        return;
+      }
+
+      let html = '';
+      lapsHistory.forEach((lap, index) => {
+        const lapNumber = lapsHistory.length - index;
+        html += `<tr>
+          <td>Giro ${lapNumber}</td>
+          <td><strong>${lap}</strong></td>
+        </tr>`;
+      });
+      tbody.innerHTML = html;
     }
 
     async function connectBLE() {
@@ -604,7 +581,6 @@
 
         isAutoReconnecting = false;
         setUIConnected(true);
-        lapStartTime = Date.now();
         log("Connesso con successo!");
       } catch (err) {
         log("Connessione fallita: " + err.message);
@@ -614,64 +590,60 @@
       }
     }
 
-  function handleDataReceived(event) {
-  const decoder = new TextDecoder('utf-8');
-  const rawData = decoder.decode(event.target.value).trim();
-  log("Ricevuto: " + rawData);
+    function handleDataReceived(event) {
+      const decoder = new TextDecoder('utf-8');
+      const rawData = decoder.decode(event.target.value).trim();
+      log("Ricevuto: " + rawData);
 
-  // 1. Prova prima a fare il parse come JSON
-  try {
-    const data = JSON.parse(rawData);
+      // 1. Prova prima a fare il parse come JSON
+      try {
+        const data = JSON.parse(rawData);
 
-    // Gestione Max DX e Max SX
-    if (data.maxDX !== undefined) {
-      maxRight = data.maxDX;
-      document.getElementById('max-right').innerText = maxRight;
+        // Gestione Max DX e Max SX
+        if (data.maxDX !== undefined) {
+          maxRight = data.maxDX;
+          document.getElementById('max-right').innerText = maxRight;
+        }
+        if (data.maxSX !== undefined) {
+          maxLeft = data.maxSX;
+          document.getElementById('max-left').innerText = maxLeft;
+        }
+
+        // Gestione Tempi sul Giro (lastLap e bestLap)
+        if (data.lastLap) {
+          document.getElementById('last-lap').innerText = data.lastLap;
+          addLapToHistory(data.lastLap);
+        }
+        if (data.bestLap) {
+          document.getElementById('best-lap').innerText = data.bestLap;
+        }
+
+        // Gestione Inclinazione/Piega Istantanea
+        if (data.lean !== undefined) {
+          updateGauge(data.lean);
+        }
+
+        saveLocalData();
+        return;
+      } catch (e) {
+        // Se non è un JSON, prosegui con i controlli fallback
+      }
+
+      // 2. Gestione dei messaggi legacy o comandi singoli
+      if (rawData.startsWith("LAP:")) {
+        const timeStr = rawData.replace("LAP:", "");
+        document.getElementById('last-lap').innerText = timeStr;
+        addLapToHistory(timeStr);
+        log("Giro ricevuto: " + timeStr);
+        return;
+      }
+
+      // 3. Fallback per valore numerico singolo dell'inclinazione
+      const parsedValue = parseFloat(rawData);
+      if (!isNaN(parsedValue)) {
+        updateGauge(parsedValue);
+      }
     }
-    if (data.maxSX !== undefined) {
-      maxLeft = data.maxSX;
-      document.getElementById('max-left').innerText = maxLeft;
-    }
-
-    // Gestione Tempi sul Giro (lastLap e bestLap)
-    if (data.lastLap) {
-      document.getElementById('last-lap').innerText = data.lastLap;
-    }
-    if (data.bestLap) {
-      document.getElementById('best-lap').innerText = data.bestLap;
-    }
-
-    // Gestione Inclinazione/Piega Istantanea (se inviata nel JSON, es. "lean")
-    if (data.lean !== undefined) {
-      updateGauge(data.lean);
-      processLeanData(data.lean);
-    }
-
-    saveLocalData();
-    return; // Se è un JSON valido, l'elaborazione finisce qui
-  } catch (e) {
-    // Se non è un JSON, prosegui con i controlli per stringhe semplici
-  }
-
-  // 2. Gestione dei messaggi legacy o comandi singoli
-  if (rawData.startsWith("LAPMS:")) {
-    const ms = parseInt(rawData.replace("LAPMS:", ""));
-    recordLap(ms);
-    return;
-  } else if (rawData.startsWith("LAP:")) {
-    const timeStr = rawData.replace("LAP:", "");
-    document.getElementById('last-lap').innerText = timeStr;
-    log("Giro ricevuto: " + timeStr);
-    return;
-  }
-
-  // 3. Fallback per valore numerico singolo dell'inclinazione
-  const parsedValue = parseFloat(rawData);
-  if (!isNaN(parsedValue)) {
-    updateGauge(parsedValue);
-    processLeanData(parsedValue);
-  }
-}
 
     function updateGauge(val) {
       document.getElementById('lean-value').innerText = Math.abs(val);
@@ -690,36 +662,17 @@
       }
     }
 
-    function processLeanData(val) {
-      const now = new Date().toLocaleTimeString();
-      sessionHistory.push({ time: now, value: val });
-
-      leanChart.data.labels.push(now);
-      leanChart.data.datasets[0].data.push(val);
-
-      if (leanChart.data.labels.length > 30) {
-        leanChart.data.labels.shift();
-        leanChart.data.datasets[0].data.shift();
-      }
-      leanChart.update();
-    }
-
     async function sendCommand() {
       const input = document.getElementById('cmd-input');
-      if (input.value) {
-        await sendQuickCmd(input.value);
-        input.value = '';
-      }
-    }
-
-    async function sendQuickCmd(cmdStr) {
-      if (!writeChar) return;
-      try {
-        const encoder = new TextEncoder();
-        await writeChar.writeValue(encoder.encode(cmdStr));
-        log("Inviato: " + cmdStr);
-      } catch (err) {
-        log("Errore invio: " + err.message);
+      if (input.value && writeChar) {
+        try {
+          const encoder = new TextEncoder();
+          await writeChar.writeValue(encoder.encode(input.value));
+          log("Inviato: " + input.value);
+          input.value = '';
+        } catch (err) {
+          log("Errore invio: " + err.message);
+        }
       }
     }
 
@@ -752,36 +705,19 @@
       document.getElementById('cmd-input').disabled = !connected;
       document.getElementById('btn-send').disabled = !connected;
 
-      const quickBtns = document.querySelectorAll('.quick-actions button');
-      quickBtns.forEach(btn => btn.disabled = !connected);
-
       if (!connected && !isAutoReconnecting) {
         document.getElementById('lean-value').innerText = '0';
         document.getElementById('gauge-needle').style.transform = 'translateX(-50%) rotate(0deg)';
       }
     }
 
-    function resetMaxValues() {
-      maxLeft = 0;
-      maxRight = 0;
-      lastLapTime = null;
-      bestLapTime = null;
-      lapHistory = [];
-      document.getElementById('max-left').innerText = '0';
-      document.getElementById('max-right').innerText = '0';
-      document.getElementById('last-lap').innerText = '--:--.--';
-      document.getElementById('best-lap').innerText = '--:--.--';
-      localStorage.removeItem('displaywolf_data');
-      log("Tutti i dati azzerati.");
-    }
-
     function saveLocalData() {
       localStorage.setItem('displaywolf_data', JSON.stringify({
         left: maxLeft,
         right: maxRight,
-        bestLap: bestLapTime,
-        lastLap: lastLapTime,
-        history: lapHistory
+        bestLap: document.getElementById('best-lap').innerText,
+        lastLap: document.getElementById('last-lap').innerText,
+        lapsHistory: lapsHistory
       }));
     }
 
@@ -791,41 +727,15 @@
         const parsed = JSON.parse(saved);
         maxLeft = parsed.left || 0;
         maxRight = parsed.right || 0;
-        bestLapTime = parsed.bestLap || null;
-        lastLapTime = parsed.lastLap || null;
-        lapHistory = parsed.history || [];
+        lapsHistory = parsed.lapsHistory || [];
 
         document.getElementById('max-left').innerText = maxLeft;
         document.getElementById('max-right').innerText = maxRight;
-        document.getElementById('last-lap').innerText = formatTime(lastLapTime);
-        document.getElementById('best-lap').innerText = formatTime(bestLapTime);
+        if (parsed.lastLap) document.getElementById('last-lap').innerText = parsed.lastLap;
+        if (parsed.bestLap) document.getElementById('best-lap').innerText = parsed.bestLap;
+
+        updateLapsHistoryUI();
       }
-    }
-
-    function exportCSV() {
-      if (sessionHistory.length === 0 && lapHistory.length === 0) {
-        alert("Nessun dato registrato nella sessione corrente.");
-        return;
-      }
-      
-      let csvContent = "data:text/csv;charset=utf-8,--- TEMPI SUL GIRO ---\nGiro,Tempo\n";
-      lapHistory.forEach(l => {
-        csvContent += `${l.lap},${l.time}\n`;
-      });
-
-      csvContent += "\n--- ANGOLI DI PIEGA ---\nOra,Angolo_Piega\n";
-      sessionHistory.forEach(row => {
-        csvContent += `${row.time},${row.value}\n`;
-      });
-
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `displaywolf_session_${Date.now()}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      log("File CSV esportato.");
     }
 
     function toggleFullscreen() {
