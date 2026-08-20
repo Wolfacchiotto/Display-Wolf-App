@@ -4,9 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>DisplayWolf Dashboard Pro</title>
-  
-  <!-- Libreria per la generazione dinamica dei PDF -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <style>
     :root {
@@ -420,6 +417,25 @@
       height: 85px;
       overflow-y: auto;
     }
+
+    /* Stili per la Finestra di Stampa / Salvataggio Report PDF */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #print-area, #print-area * {
+        visibility: visible;
+      }
+      #print-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        color: #000;
+        background: #fff;
+        padding: 20px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -499,7 +515,7 @@
         </table>
       </div>
       <button class="btn-reset" onclick="resetHistory()">Reset Storico</button>
-      <button class="btn-save" onclick="exportPDF()">Salva Report (PDF)</button>
+      <button class="btn-save" onclick="exportReport()">Salva Report (PDF)</button>
     </div>
 
     <!-- Invio Parametri e Comandi -->
@@ -528,7 +544,7 @@
 
     let maxLeft = 0;
     let maxRight = 0;
-    let lapsHistory = []; // max 30 giri
+    let lapsHistory = [];
 
     function log(text) {
       const logEl = document.getElementById('log-output');
@@ -539,7 +555,6 @@
     function addLapToHistory(lapTimeString) {
       if (!lapTimeString || lapTimeString === "--:--.--" || lapTimeString === "00:00.000") return;
 
-      // Evita duplicati consecutivi
       if (lapsHistory.length > 0 && lapsHistory[0] === lapTimeString) {
         return;
       }
@@ -581,72 +596,91 @@
       log("Storico giri azzerato.");
     }
 
-    function exportPDF() {
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
+    function exportReport() {
+      try {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT');
 
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT');
+        const bestLap = document.getElementById('best-lap').innerText;
+        const lastLap = document.getElementById('last-lap').innerText;
 
-      const bestLap = document.getElementById('best-lap').innerText;
-      const lastLap = document.getElementById('last-lap').innerText;
+        let tableRows = '';
+        if (lapsHistory.length === 0) {
+          tableRows = '<tr><td style="padding: 8px; border-bottom: 1px solid #ddd;" colspan="2">Nessun giro registrato</td></tr>';
+        } else {
+          lapsHistory.forEach((lap, index) => {
+            const lapNumber = lapsHistory.length - index;
+            tableRows += `
+              <tr>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd;">Giro ${lapNumber}</td>
+                <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">${lap}</td>
+              </tr>
+            `;
+          });
+        }
 
-      // Intestazione
-      doc.setFontSize(20);
-      doc.setTextColor(2, 132, 197); // Accent Blue
-      doc.text("DISPLAYWOLF TELEMETRY REPORT", 14, 20);
+        const reportHTML = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>DisplayWolf Telemetry Report</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; color: #111; }
+              h1 { color: #0284c7; border-bottom: 2px solid #0284c7; padding-bottom: 5px; }
+              .meta { font-size: 12px; color: #666; margin-bottom: 20px; }
+              .section { margin-bottom: 20px; }
+              .box { background: #f4f4f5; border: 1px solid #ccc; padding: 12px; border-radius: 8px; margin-bottom: 15px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+              th { text-align: left; border-bottom: 2px solid #333; padding: 8px; background: #eee; }
+            </style>
+          </head>
+          <body>
+            <h1>DISPLAYWOLF TELEMETRY REPORT</h1>
+            <div class="meta">Data generazione: ${dateStr}</div>
 
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Data generazione: ${dateStr}`, 14, 28);
-      doc.line(14, 32, 196, 32);
+            <div class="box">
+              <h3>Riepilogo Prestazioni</h3>
+              <p><strong>Best Lap:</strong> ${bestLap}</p>
+              <p><strong>Last Lap:</strong> ${lastLap}</p>
+              <p><strong>Max Angolo Piega Sinistra (SX):</strong> ${maxLeft}°</p>
+              <p><strong>Max Angolo Piega Destra (DX):</strong> ${maxRight}°</p>
+            </div>
 
-      // Sezione Riepilogo Tempi & Piega
-      doc.setFontSize(14);
-      doc.setTextColor(0, 0, 0);
-      doc.text("Riepilogo Prestazioni", 14, 42);
+            <div class="section">
+              <h3>Storico Giri</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Giro</th>
+                    <th>Tempo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tableRows}
+                </tbody>
+              </table>
+            </div>
 
-      doc.setFontSize(11);
-      doc.text(`• Best Lap: ${bestLap}`, 14, 52);
-      doc.text(`• Last Lap: ${lastLap}`, 14, 60);
-      doc.text(`• Max Inclinazione Sinistra (SX): ${maxLeft}°`, 14, 68);
-      doc.text(`• Max Inclinazione Destra (DX): ${maxRight}°`, 14, 76);
+            <script>
+              window.onload = function() {
+                window.print();
+              };
+            <\/script>
+          </body>
+          </html>
+        `;
 
-      doc.line(14, 82, 196, 82);
-
-      // Sezione Storico Giri
-      doc.setFontSize(14);
-      doc.text("Storico Giri", 14, 92);
-
-      let yPos = 102;
-      doc.setFontSize(10);
-      doc.setTextColor(80, 80, 80);
-      doc.text("N° Giro", 14, yPos);
-      doc.text("Tempo Registrato", 60, yPos);
-      doc.line(14, yPos + 2, 196, yPos + 2);
-
-      yPos += 10;
-      doc.setTextColor(0, 0, 0);
-
-      if (lapsHistory.length === 0) {
-        doc.text("Nessun giro registrato nello storico.", 14, yPos);
-      } else {
-        lapsHistory.forEach((lap, index) => {
-          const lapNumber = lapsHistory.length - index;
-          doc.text(`Giro ${lapNumber}`, 14, yPos);
-          doc.text(`${lap}`, 60, yPos);
-          yPos += 7;
-
-          // Gestione cambio pagina se lo storico è lungo
-          if (yPos > 280) {
-            doc.addPage();
-            yPos = 20;
-          }
-        });
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          printWindow.document.write(reportHTML);
+          printWindow.document.close();
+          log("Report aperto con successo!");
+        } else {
+          alert("Sblocca i popup del browser per scaricare/stampare il PDF!");
+        }
+      } catch (err) {
+        log("Errore generazione report: " + err.message);
       }
-
-      doc.save(`DisplayWolf_Report_${now.toISOString().slice(0,10)}.pdf`);
-      log("Report PDF scaricato.");
     }
 
     async function connectBLE() {
@@ -700,11 +734,9 @@
       const rawData = decoder.decode(event.target.value).trim();
       log("Ricevuto: " + rawData);
 
-      // 1. Prova prima a fare il parse come JSON
       try {
         const data = JSON.parse(rawData);
 
-        // Gestione Max DX e Max SX
         if (data.maxDX !== undefined) {
           maxRight = data.maxDX;
           document.getElementById('max-right').innerText = maxRight;
@@ -714,7 +746,6 @@
           document.getElementById('max-left').innerText = maxLeft;
         }
 
-        // Gestione Tempi sul Giro (lastLap e bestLap)
         if (data.lastLap) {
           document.getElementById('last-lap').innerText = data.lastLap;
           addLapToHistory(data.lastLap);
@@ -723,7 +754,6 @@
           document.getElementById('best-lap').innerText = data.bestLap;
         }
 
-        // Gestione Inclinazione/Piega Istantanea
         if (data.lean !== undefined) {
           updateGauge(data.lean);
         }
@@ -731,10 +761,8 @@
         saveLocalData();
         return;
       } catch (e) {
-        // Se non è un JSON, prosegui con i controlli fallback
       }
 
-      // 2. Gestione dei messaggi legacy o comandi singoli
       if (rawData.startsWith("LAP:")) {
         const timeStr = rawData.replace("LAP:", "");
         document.getElementById('last-lap').innerText = timeStr;
@@ -743,7 +771,6 @@
         return;
       }
 
-      // 3. Fallback per valore numerico singolo dell'inclinazione
       const parsedValue = parseFloat(rawData);
       if (!isNaN(parsedValue)) {
         updateGauge(parsedValue);
@@ -853,7 +880,6 @@
       }
     }
 
-    // Carica i dati salvati
     loadLocalData();
   </script>
 </body>
