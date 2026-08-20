@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>DisplayWolf Dashboard Pro</title>
+  
+  <!-- Libreria per la generazione dinamica dei PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <style>
     :root {
       --bg-color: #09090b;
@@ -155,6 +159,18 @@
 
     .btn-reset:hover {
       background: #27272a;
+    }
+
+    .btn-save {
+      background: var(--accent-color);
+      color: #fff;
+      border: 1px solid var(--accent-glow);
+      width: 100%;
+      margin-top: 6px;
+    }
+
+    .btn-save:hover {
+      background: #0369a1;
     }
 
     /* Sezione Lap Timer (Best / Last Lap) */
@@ -483,6 +499,7 @@
         </table>
       </div>
       <button class="btn-reset" onclick="resetHistory()">Reset Storico</button>
+      <button class="btn-save" onclick="exportPDF()">Salva Report (PDF)</button>
     </div>
 
     <!-- Invio Parametri e Comandi -->
@@ -562,6 +579,74 @@
       updateLapsHistoryUI();
       saveLocalData();
       log("Storico giri azzerato.");
+    }
+
+    function exportPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT');
+
+      const bestLap = document.getElementById('best-lap').innerText;
+      const lastLap = document.getElementById('last-lap').innerText;
+
+      // Intestazione
+      doc.setFontSize(20);
+      doc.setTextColor(2, 132, 197); // Accent Blue
+      doc.text("DISPLAYWOLF TELEMETRY REPORT", 14, 20);
+
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Data generazione: ${dateStr}`, 14, 28);
+      doc.line(14, 32, 196, 32);
+
+      // Sezione Riepilogo Tempi & Piega
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text("Riepilogo Prestazioni", 14, 42);
+
+      doc.setFontSize(11);
+      doc.text(`• Best Lap: ${bestLap}`, 14, 52);
+      doc.text(`• Last Lap: ${lastLap}`, 14, 60);
+      doc.text(`• Max Inclinazione Sinistra (SX): ${maxLeft}°`, 14, 68);
+      doc.text(`• Max Inclinazione Destra (DX): ${maxRight}°`, 14, 76);
+
+      doc.line(14, 82, 196, 82);
+
+      // Sezione Storico Giri
+      doc.setFontSize(14);
+      doc.text("Storico Giri", 14, 92);
+
+      let yPos = 102;
+      doc.setFontSize(10);
+      doc.setTextColor(80, 80, 80);
+      doc.text("N° Giro", 14, yPos);
+      doc.text("Tempo Registrato", 60, yPos);
+      doc.line(14, yPos + 2, 196, yPos + 2);
+
+      yPos += 10;
+      doc.setTextColor(0, 0, 0);
+
+      if (lapsHistory.length === 0) {
+        doc.text("Nessun giro registrato nello storico.", 14, yPos);
+      } else {
+        lapsHistory.forEach((lap, index) => {
+          const lapNumber = lapsHistory.length - index;
+          doc.text(`Giro ${lapNumber}`, 14, yPos);
+          doc.text(`${lap}`, 60, yPos);
+          yPos += 7;
+
+          // Gestione cambio pagina se lo storico è lungo
+          if (yPos > 280) {
+            doc.addPage();
+            yPos = 20;
+          }
+        });
+      }
+
+      doc.save(`DisplayWolf_Report_${now.toISOString().slice(0,10)}.pdf`);
+      log("Report PDF scaricato.");
     }
 
     async function connectBLE() {
