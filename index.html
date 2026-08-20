@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
@@ -145,6 +145,52 @@
     .btn-danger {
       background: #3f3f46;
       color: var(--text-main);
+    }
+
+    /* Sezione Lap Timer (Best / Last Lap) */
+    .lap-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .lap-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 12px;
+      text-align: center;
+      position: relative;
+    }
+
+    .lap-card.best {
+      border-color: rgba(34, 197, 94, 0.4);
+      background: linear-gradient(180deg, rgba(34, 197, 94, 0.05) 0%, var(--card-bg) 100%);
+    }
+
+    .lap-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .lap-card.best .lap-label {
+      color: var(--success);
+    }
+
+    .lap-value {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-top: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .lap-card.best .lap-value {
+      color: var(--success);
     }
 
     /* Card Angolo di Piega Visuale */
@@ -357,6 +403,18 @@
       <button id="btn-disconnect" onclick="disconnectBLE()" class="btn-danger" disabled>Disconnetti</button>
     </div>
 
+    <!-- Sezione Lap Timer -->
+    <div class="lap-stats">
+      <div class="lap-card">
+        <div class="lap-label">Last Lap</div>
+        <div id="last-lap" class="lap-value">--:--.--</div>
+      </div>
+      <div class="lap-card best">
+        <div class="lap-label">Best Lap</div>
+        <div id="best-lap" class="lap-value">--:--.--</div>
+      </div>
+    </div>
+
     <!-- Indicatore Visuale Piega Istantanea -->
     <div class="gauge-card">
       <div class="gauge-title">Inclinazione Corrente</div>
@@ -392,18 +450,18 @@
     <div class="control-card">
       <div class="gauge-title">Invia Comando</div>
       <div class="input-wrapper">
-        <input type="text" id="cmd-input" placeholder="Es. RESET, SET:45..." disabled />
+        <input type="text" id="cmd-input" placeholder="Es. LAP, RESET, SET:45..." disabled />
         <button id="btn-send" onclick="sendCommand()" disabled>Invia</button>
       </div>
       
       <div class="quick-actions">
+        <button class="btn-quick" onclick="triggerManualLap()" id="btn-lap">⏱️ Nuovo Giro</button>
         <button class="btn-quick" onclick="sendQuickCmd('RESET')" disabled>Reset Piega</button>
         <button class="btn-quick" onclick="sendQuickCmd('GET_DATA')" disabled>Scarica Dati</button>
-        <button class="btn-quick" onclick="sendQuickCmd('PING')" disabled>Ping</button>
       </div>
 
       <div class="session-actions">
-        <button class="btn-quick" onclick="resetMaxValues()">Azzera Max</button>
+        <button class="btn-quick" onclick="resetMaxValues()">Azzera Dati</button>
         <button class="btn-quick" onclick="exportCSV()">Esporta CSV</button>
       </div>
     </div>
@@ -425,6 +483,11 @@
 
     let maxLeft = 0;
     let maxRight = 0;
+    let lastLapTime = null; // in ms
+    let bestLapTime = null; // in ms
+    let lapStartTime = Date.now();
+    let lapHistory = [];
+
     let sessionHistory = []; // { timestamp, value }
 
     // Inizializzazione Grafico Chart.js
@@ -467,6 +530,43 @@
       logEl.scrollTop = logEl.scrollHeight;
     }
 
+    function formatTime(ms) {
+      if (!ms) return "--:--.--";
+      const totalSec = ms / 1000;
+      const min = Math.floor(totalSec / 60);
+      const sec = Math.floor(totalSec % 60);
+      const millis = Math.floor((ms % 1000) / 10);
+      
+      const pad = (n) => (n < 10 ? "0" + n : n);
+      return `${pad(min)}:${pad(sec)}.${pad(millis)}`;
+    }
+
+    function recordLap(msTime) {
+      if (!msTime || msTime < 5000) return; // Ignora se sotto i 5 secondi
+
+      lastLapTime = msTime;
+      document.getElementById('last-lap').innerText = formatTime(lastLapTime);
+
+      if (!bestLapTime || lastLapTime < bestLapTime) {
+        bestLapTime = lastLapTime;
+        document.getElementById('best-lap').innerText = formatTime(bestLapTime);
+        log(" nuovo BEST LAP: " + formatTime(bestLapTime));
+      } else {
+        log("Giro completato: " + formatTime(lastLapTime));
+      }
+
+      lapHistory.push({ lap: lapHistory.length + 1, time: formatTime(lastLapTime), ms: lastLapTime });
+      saveLocalData();
+    }
+
+    function triggerManualLap() {
+      const now = Date.now();
+      const elapsed = now - lapStartTime;
+      recordLap(elapsed);
+      lapStartTime = now;
+      sendQuickCmd('LAP');
+    }
+
     async function connectBLE() {
       if (!navigator.bluetooth) {
         alert("Web Bluetooth non è supportato. Su iOS usa l'app Bluefy!");
@@ -504,18 +604,32 @@
 
         isAutoReconnecting = false;
         setUIConnected(true);
+        lapStartTime = Date.now();
         log("Connesso con successo!");
       } catch (err) {
         log("Connessione fallita: " + err.message);
         if (isAutoReconnecting) {
-          setTimeout(performConnection, 3000); // Riprova ogni 3 secondi
+          setTimeout(performConnection, 3000);
         }
       }
     }
 
     function handleDataReceived(event) {
       const decoder = new TextDecoder('utf-8');
-      const rawData = decoder.decode(event.target.value);
+      const rawData = decoder.decode(event.target.value).trim();
+
+      // Riconoscimento pacchetto LAP (es. "LAP:1:24.35" oppure millisecondi "LAPMS:84350")
+      if (rawData.startsWith("LAPMS:")) {
+        const ms = parseInt(rawData.replace("LAPMS:", ""));
+        recordLap(ms);
+        return;
+      } else if (rawData.startsWith("LAP:")) {
+        const timeStr = rawData.replace("LAP:", "");
+        document.getElementById('last-lap').innerText = timeStr;
+        log("Giro ricevuto: " + timeStr);
+        return;
+      }
+
       const parsedValue = parseFloat(rawData);
 
       if (!isNaN(parsedValue)) {
@@ -526,14 +640,11 @@
     }
 
     function updateGauge(val) {
-      // Aggiorna testo
       document.getElementById('lean-value').innerText = Math.abs(val);
 
-      // Aggiorna lancetta (limite visivo ±60°)
       const clamped = Math.max(-60, Math.min(60, val));
       document.getElementById('gauge-needle').style.transform = `translateX(-50%) rotate(${clamped}deg)`;
 
-      // Tracciamento dei massimi SX (negativo) e DX (positivo)
       if (val < 0 && Math.abs(val) > maxLeft) {
         maxLeft = Math.abs(val);
         document.getElementById('max-left').innerText = maxLeft;
@@ -549,7 +660,6 @@
       const now = new Date().toLocaleTimeString();
       sessionHistory.push({ time: now, value: val });
 
-      // Aggiorna Grafico (Mantiene gli ultimi 30 punti)
       leanChart.data.labels.push(now);
       leanChart.data.datasets[0].data.push(val);
 
@@ -590,7 +700,6 @@
       setUIConnected(false);
       log("Connessione persa.");
 
-      // Gestione Auto-Riconnessione
       if (bleDevice) {
         isAutoReconnecting = true;
         document.getElementById('status-dot').className = 'status-dot reconnecting';
@@ -621,33 +730,56 @@
     function resetMaxValues() {
       maxLeft = 0;
       maxRight = 0;
+      lastLapTime = null;
+      bestLapTime = null;
+      lapHistory = [];
       document.getElementById('max-left').innerText = '0';
       document.getElementById('max-right').innerText = '0';
-      localStorage.removeItem('displaywolf_max');
-      log("Valori Max azzerati.");
+      document.getElementById('last-lap').innerText = '--:--.--';
+      document.getElementById('best-lap').innerText = '--:--.--';
+      localStorage.removeItem('displaywolf_data');
+      log("Tutti i dati azzerati.");
     }
 
     function saveLocalData() {
-      localStorage.setItem('displaywolf_max', JSON.stringify({ left: maxLeft, right: maxRight }));
+      localStorage.setItem('displaywolf_data', JSON.stringify({
+        left: maxLeft,
+        right: maxRight,
+        bestLap: bestLapTime,
+        lastLap: lastLapTime,
+        history: lapHistory
+      }));
     }
 
     function loadLocalData() {
-      const saved = localStorage.getItem('displaywolf_max');
+      const saved = localStorage.getItem('displaywolf_data');
       if (saved) {
         const parsed = JSON.parse(saved);
         maxLeft = parsed.left || 0;
         maxRight = parsed.right || 0;
+        bestLapTime = parsed.bestLap || null;
+        lastLapTime = parsed.lastLap || null;
+        lapHistory = parsed.history || [];
+
         document.getElementById('max-left').innerText = maxLeft;
         document.getElementById('max-right').innerText = maxRight;
+        document.getElementById('last-lap').innerText = formatTime(lastLapTime);
+        document.getElementById('best-lap').innerText = formatTime(bestLapTime);
       }
     }
 
     function exportCSV() {
-      if (sessionHistory.length === 0) {
+      if (sessionHistory.length === 0 && lapHistory.length === 0) {
         alert("Nessun dato registrato nella sessione corrente.");
         return;
       }
-      let csvContent = "data:text/csv;charset=utf-8,Ora,Angolo_Piega\n";
+      
+      let csvContent = "data:text/csv;charset=utf-8,--- TEMPI SUL GIRO ---\nGiro,Tempo\n";
+      lapHistory.forEach(l => {
+        csvContent += `${l.lap},${l.time}\n`;
+      });
+
+      csvContent += "\n--- ANGOLI DI PIEGA ---\nOra,Angolo_Piega\n";
       sessionHistory.forEach(row => {
         csvContent += `${row.time},${row.value}\n`;
       });
@@ -672,7 +804,7 @@
       }
     }
 
-    // Carica dati storici al boot
+    // Carica i dati salvati
     loadLocalData();
   </script>
 </body>
