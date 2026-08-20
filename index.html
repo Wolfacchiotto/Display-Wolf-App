@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>DisplayWolf Dashboard</title>
+  <title>DisplayWolf Dashboard Pro</title>
+  <!-- Chart.js per il grafico in tempo reale -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --bg-color: #09090b;
@@ -30,22 +32,22 @@
       color: var(--text-main);
       display: flex;
       justify-content: center;
-      padding: 20px 15px;
+      padding: 15px 10px;
       min-height: 100vh;
     }
 
     .app-container {
       width: 100%;
-      max-width: 420px;
+      max-width: 440px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
     }
 
     /* Header e Stato */
     header {
       background: var(--card-bg);
-      padding: 16px;
+      padding: 14px 16px;
       border-radius: 16px;
       border: 1px solid var(--border-color);
       display: flex;
@@ -55,20 +57,26 @@
 
     h1 {
       font-size: 1.1rem;
-      font-weight: 700;
+      font-weight: 800;
       letter-spacing: 0.5px;
       text-transform: uppercase;
       color: var(--text-main);
     }
 
-    .status-badge {
+    .header-actions {
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 0.85rem;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
       font-weight: 600;
       background: #000;
-      padding: 6px 12px;
+      padding: 6px 10px;
       border-radius: 20px;
       border: 1px solid var(--border-color);
     }
@@ -86,6 +94,21 @@
       box-shadow: 0 0 8px var(--success);
     }
 
+    .status-dot.reconnecting {
+      background-color: #f59e0b;
+      box-shadow: 0 0 8px #f59e0b;
+    }
+
+    .btn-icon {
+      background: #27272a;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      color: var(--text-main);
+      cursor: pointer;
+    }
+
     /* Pulsanti di Connessione */
     .btn-group {
       display: grid;
@@ -97,9 +120,9 @@
       background: var(--accent-color);
       color: #fff;
       border: none;
-      padding: 14px;
+      padding: 12px;
       border-radius: 12px;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
@@ -124,50 +147,79 @@
       color: var(--text-main);
     }
 
-    /* Card Angolo di Piega */
+    /* Card Angolo di Piega Visuale */
     .gauge-card {
       background: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 20px;
-      padding: 24px 16px;
+      padding: 20px 16px;
       text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
       position: relative;
-      overflow: hidden;
-    }
-
-    .gauge-card::before {
-      content: "";
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(circle, rgba(2, 132, 199, 0.08) 0%, transparent 60%);
-      pointer-events: none;
     }
 
     .gauge-title {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 700;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 1px;
-      margin-bottom: 8px;
+    }
+
+    .visual-gauge-container {
+      position: relative;
+      width: 200px;
+      height: 110px;
+      margin-top: 10px;
+    }
+
+    .gauge-arc-bg {
+      width: 200px;
+      height: 100px;
+      border-top-left-radius: 100px;
+      border-top-right-radius: 100px;
+      border: 12px solid #27272a;
+      border-bottom: none;
+      box-sizing: border-box;
+    }
+
+    .gauge-needle {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      width: 4px;
+      height: 80px;
+      background: var(--accent-glow);
+      border-radius: 2px;
+      transform-origin: bottom center;
+      transform: translateX(-50%) rotate(0deg);
+      transition: transform 0.15s cubic-bezier(0.1, 0.9, 0.2, 1);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
+    .gauge-center-dot {
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--text-main);
+      transform: translateX(-50%);
     }
 
     .gauge-value-container {
       display: flex;
       align-items: baseline;
       justify-content: center;
-      gap: 4px;
-      margin: 10px 0;
+      gap: 2px;
+      margin-top: 5px;
     }
 
     .gauge-value {
-      font-size: 4.5rem;
+      font-size: 3.8rem;
       font-weight: 900;
       color: var(--accent-glow);
       line-height: 1;
@@ -175,20 +227,59 @@
     }
 
     .gauge-unit {
-      font-size: 2rem;
+      font-size: 1.8rem;
       font-weight: 700;
       color: var(--accent-glow);
     }
 
-    /* Pannello Controllo e Comandi */
+    /* Sezione Max SX / DX */
+    .split-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-top: 4px;
+    }
+
+    /* Grafico Card */
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 14px;
+      height: 180px;
+    }
+
+    /* Control Panel & Controls */
     .control-card {
       background: var(--card-bg);
       border: 1px solid var(--border-color);
       border-radius: 16px;
-      padding: 16px;
+      padding: 14px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
     }
 
     .input-wrapper {
@@ -201,9 +292,9 @@
       background: #000;
       border: 1px solid var(--border-color);
       border-radius: 10px;
-      padding: 12px;
+      padding: 10px;
       color: #fff;
-      font-size: 0.95rem;
+      font-size: 0.85rem;
       outline: none;
     }
 
@@ -211,18 +302,23 @@
       border-color: var(--accent-color);
     }
 
-    /* Quick Action Buttons */
     .quick-actions {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
+      gap: 6px;
     }
 
     .btn-quick {
       background: #27272a;
       border: 1px solid var(--border-color);
-      font-size: 0.8rem;
-      padding: 10px;
+      font-size: 0.75rem;
+      padding: 8px;
+    }
+
+    .session-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
     }
 
     /* Console Log */
@@ -230,11 +326,11 @@
       background: #000;
       border: 1px solid var(--border-color);
       border-radius: 12px;
-      padding: 12px;
+      padding: 10px;
       font-family: monospace;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: var(--success);
-      height: 90px;
+      height: 85px;
       overflow-y: auto;
     }
   </style>
@@ -246,9 +342,12 @@
     <!-- Header -->
     <header>
       <h1>DisplayWolf</h1>
-      <div class="status-badge">
-        <div id="status-dot" class="status-dot"></div>
-        <span id="status-text">Disconnesso</span>
+      <div class="header-actions">
+        <button class="btn-icon" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+        <div class="status-badge">
+          <div id="status-dot" class="status-dot"></div>
+          <span id="status-text">Disconnesso</span>
+        </div>
       </div>
     </header>
 
@@ -258,16 +357,38 @@
       <button id="btn-disconnect" onclick="disconnectBLE()" class="btn-danger" disabled>Disconnetti</button>
     </div>
 
-    <!-- Valore Angolo di Piega -->
+    <!-- Indicatore Visuale Piega Istantanea -->
     <div class="gauge-card">
-      <div class="gauge-title">Max Angolo di Piega</div>
+      <div class="gauge-title">Inclinazione Corrente</div>
+      <div class="visual-gauge-container">
+        <div class="gauge-arc-bg"></div>
+        <div id="gauge-needle" class="gauge-needle"></div>
+        <div class="gauge-center-dot"></div>
+      </div>
       <div class="gauge-value-container">
         <span id="lean-value" class="gauge-value">0</span>
         <span class="gauge-unit">°</span>
       </div>
     </div>
 
-    <!-- Invio Parametri -->
+    <!-- Massimi SX / DX -->
+    <div class="split-stats">
+      <div class="stat-card">
+        <div class="stat-label">Max Sinistra (SX)</div>
+        <div class="stat-value"><span id="max-left">0</span>°</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Max Destra (DX)</div>
+        <div class="stat-value"><span id="max-right">0</span>°</div>
+      </div>
+    </div>
+
+    <!-- Grafico In Real-Time -->
+    <div class="chart-card">
+      <canvas id="leanChart"></canvas>
+    </div>
+
+    <!-- Invio Parametri e Comandi -->
     <div class="control-card">
       <div class="gauge-title">Invia Comando</div>
       <div class="input-wrapper">
@@ -275,27 +396,70 @@
         <button id="btn-send" onclick="sendCommand()" disabled>Invia</button>
       </div>
       
-      <!-- Pulsanti rapidi di esempio -->
       <div class="quick-actions">
-        <button class="btn-quick" onclick="sendQuickCmd('RESET')" disabled class="btn-cmd">Reset Piega</button>
-        <button class="btn-quick" onclick="sendQuickCmd('GET_DATA')" disabled class="btn-cmd">Scarica Dati</button>
-        <button class="btn-quick" onclick="sendQuickCmd('PING')" disabled class="btn-cmd">Ping</button>
+        <button class="btn-quick" onclick="sendQuickCmd('RESET')" disabled>Reset Piega</button>
+        <button class="btn-quick" onclick="sendQuickCmd('GET_DATA')" disabled>Scarica Dati</button>
+        <button class="btn-quick" onclick="sendQuickCmd('PING')" disabled>Ping</button>
+      </div>
+
+      <div class="session-actions">
+        <button class="btn-quick" onclick="resetMaxValues()">Azzera Max</button>
+        <button class="btn-quick" onclick="exportCSV()">Esporta CSV</button>
       </div>
     </div>
 
     <!-- Terminale Log -->
-    <div id="log-output" class="log-card">Pronto per la connessione...</div>
+    <div id="log-output" class="log-card">In attesa della connessione...</div>
 
   </div>
 
   <script>
-    // UUID del tuo DisplayWolf
-const SERVICE_UUID     = '12345678-1234-1234-1234-123456789abc';
-const CHAR_READ_UUID   = '87654321-4321-4321-4321-cba987654321'; 
-const CHAR_WRITE_UUID  = '87654321-4321-4321-4321-cba987654321';
+    // UUID DisplayWolf
+    const SERVICE_UUID    = '12345678-1234-1234-1234-123456789abc';
+    const CHAR_READ_UUID  = '87654321-4321-4321-4321-cba987654321'; 
+    const CHAR_WRITE_UUID = '87654321-4321-4321-4321-cba987654321';
 
     let bleDevice = null;
     let writeChar = null;
+    let isAutoReconnecting = false;
+
+    let maxLeft = 0;
+    let maxRight = 0;
+    let sessionHistory = []; // { timestamp, value }
+
+    // Inizializzazione Grafico Chart.js
+    const ctx = document.getElementById('leanChart').getContext('2d');
+    const leanChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Angolo Piega (°)',
+          data: [],
+          borderColor: '#38bdf8',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+          fill: true,
+          backgroundColor: 'rgba(56, 189, 248, 0.1)'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { display: false },
+          y: {
+            min: -60,
+            max: 60,
+            grid: { color: '#27272a' },
+            ticks: { color: '#a1a1aa', font: { size: 10 } }
+          }
+        },
+        plugins: { legend: { display: false } },
+        animation: false
+      }
+    });
 
     function log(text) {
       const logEl = document.getElementById('log-output');
@@ -305,52 +469,95 @@ const CHAR_WRITE_UUID  = '87654321-4321-4321-4321-cba987654321';
 
     async function connectBLE() {
       if (!navigator.bluetooth) {
-        alert("Web Bluetooth non è supportato. Su iOS scarica e apri questa pagina con l'app Bluefy!");
+        alert("Web Bluetooth non è supportato. Su iOS usa l'app Bluefy!");
         return;
       }
 
       try {
-        log("Ricerca del display in corso...");
+        log("Ricerca del dispositivo...");
         bleDevice = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: [SERVICE_UUID]
         });
 
-        log("Connessione a " + bleDevice.name + "...");
-        const server = await bleDevice.gatt.connect();
-
-        log("Ottengo i servizi...");
-        const service = await server.getPrimaryService(SERVICE_UUID);
-
-        // Configura ascolto notifiche per l'angolo di piega
-        const readChar = await service.getCharacteristic(CHAR_READ_UUID);
-        await readChar.startNotifications();
-        readChar.addEventListener('characteristicvaluechanged', handleDataReceived);
-
-        // Configura scrittura comandi
-        writeChar = await service.getCharacteristic(CHAR_WRITE_UUID);
-
-        // Aggiorna Grafica
-        setUIConnected(true);
-        log("Connesso al Display!");
-
         bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        await performConnection();
 
       } catch (err) {
         log("Errore: " + err.message);
       }
     }
 
+    async function performConnection() {
+      try {
+        log("Connessione in corso a " + bleDevice.name + "...");
+        const server = await bleDevice.gatt.connect();
+
+        log("Ottengo il servizio...");
+        const service = await server.getPrimaryService(SERVICE_UUID);
+
+        const readChar = await service.getCharacteristic(CHAR_READ_UUID);
+        await readChar.startNotifications();
+        readChar.addEventListener('characteristicvaluechanged', handleDataReceived);
+
+        writeChar = await service.getCharacteristic(CHAR_WRITE_UUID);
+
+        isAutoReconnecting = false;
+        setUIConnected(true);
+        log("Connesso con successo!");
+      } catch (err) {
+        log("Connessione fallita: " + err.message);
+        if (isAutoReconnecting) {
+          setTimeout(performConnection, 3000); // Riprova ogni 3 secondi
+        }
+      }
+    }
+
     function handleDataReceived(event) {
       const decoder = new TextDecoder('utf-8');
-      const data = decoder.decode(event.target.value);
-      
-      // Se ricevi un numero, aggiorna il valore visivo
-      const parsedValue = parseFloat(data);
+      const rawData = decoder.decode(event.target.value);
+      const parsedValue = parseFloat(rawData);
+
       if (!isNaN(parsedValue)) {
-        document.getElementById('lean-value').innerText = parsedValue;
+        updateGauge(parsedValue);
+        processLeanData(parsedValue);
       }
-      log("Ricevuto: " + data);
+      log("Ricevuto: " + rawData);
+    }
+
+    function updateGauge(val) {
+      // Aggiorna testo
+      document.getElementById('lean-value').innerText = Math.abs(val);
+
+      // Aggiorna lancetta (limite visivo ±60°)
+      const clamped = Math.max(-60, Math.min(60, val));
+      document.getElementById('gauge-needle').style.transform = `translateX(-50%) rotate(${clamped}deg)`;
+
+      // Tracciamento dei massimi SX (negativo) e DX (positivo)
+      if (val < 0 && Math.abs(val) > maxLeft) {
+        maxLeft = Math.abs(val);
+        document.getElementById('max-left').innerText = maxLeft;
+        saveLocalData();
+      } else if (val > 0 && val > maxRight) {
+        maxRight = val;
+        document.getElementById('max-right').innerText = maxRight;
+        saveLocalData();
+      }
+    }
+
+    function processLeanData(val) {
+      const now = new Date().toLocaleTimeString();
+      sessionHistory.push({ time: now, value: val });
+
+      // Aggiorna Grafico (Mantiene gli ultimi 30 punti)
+      leanChart.data.labels.push(now);
+      leanChart.data.datasets[0].data.push(val);
+
+      if (leanChart.data.labels.length > 30) {
+        leanChart.data.labels.shift();
+        leanChart.data.datasets[0].data.shift();
+      }
+      leanChart.update();
     }
 
     async function sendCommand() {
@@ -373,6 +580,7 @@ const CHAR_WRITE_UUID  = '87654321-4321-4321-4321-cba987654321';
     }
 
     async function disconnectBLE() {
+      isAutoReconnecting = false;
       if (bleDevice && bleDevice.gatt.connected) {
         bleDevice.gatt.disconnect();
       }
@@ -380,13 +588,22 @@ const CHAR_WRITE_UUID  = '87654321-4321-4321-4321-cba987654321';
 
     function onDisconnected() {
       setUIConnected(false);
-      log("Dispositivo disconnesso.");
+      log("Connessione persa.");
+
+      // Gestione Auto-Riconnessione
+      if (bleDevice) {
+        isAutoReconnecting = true;
+        document.getElementById('status-dot').className = 'status-dot reconnecting';
+        document.getElementById('status-text').innerText = 'Riconnessione...';
+        log("Tentativo di auto-riconnessione in corso...");
+        setTimeout(performConnection, 2000);
+      }
     }
 
     function setUIConnected(connected) {
       document.getElementById('status-dot').className = connected ? 'status-dot connected' : 'status-dot';
       document.getElementById('status-text').innerText = connected ? 'Connesso' : 'Disconnesso';
-      
+
       document.getElementById('btn-connect').disabled = connected;
       document.getElementById('btn-disconnect').disabled = !connected;
       document.getElementById('cmd-input').disabled = !connected;
@@ -395,10 +612,68 @@ const CHAR_WRITE_UUID  = '87654321-4321-4321-4321-cba987654321';
       const quickBtns = document.querySelectorAll('.quick-actions button');
       quickBtns.forEach(btn => btn.disabled = !connected);
 
-      if (!connected) {
+      if (!connected && !isAutoReconnecting) {
         document.getElementById('lean-value').innerText = '0';
+        document.getElementById('gauge-needle').style.transform = 'translateX(-50%) rotate(0deg)';
       }
     }
+
+    function resetMaxValues() {
+      maxLeft = 0;
+      maxRight = 0;
+      document.getElementById('max-left').innerText = '0';
+      document.getElementById('max-right').innerText = '0';
+      localStorage.removeItem('displaywolf_max');
+      log("Valori Max azzerati.");
+    }
+
+    function saveLocalData() {
+      localStorage.setItem('displaywolf_max', JSON.stringify({ left: maxLeft, right: maxRight }));
+    }
+
+    function loadLocalData() {
+      const saved = localStorage.getItem('displaywolf_max');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        maxLeft = parsed.left || 0;
+        maxRight = parsed.right || 0;
+        document.getElementById('max-left').innerText = maxLeft;
+        document.getElementById('max-right').innerText = maxRight;
+      }
+    }
+
+    function exportCSV() {
+      if (sessionHistory.length === 0) {
+        alert("Nessun dato registrato nella sessione corrente.");
+        return;
+      }
+      let csvContent = "data:text/csv;charset=utf-8,Ora,Angolo_Piega\n";
+      sessionHistory.forEach(row => {
+        csvContent += `${row.time},${row.value}\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `displaywolf_session_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      log("File CSV esportato.");
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Carica dati storici al boot
+    loadLocalData();
   </script>
 </body>
 </html>
