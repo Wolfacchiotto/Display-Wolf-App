@@ -145,6 +145,17 @@
       color: var(--text-main);
     }
 
+    .btn-warning {
+      background: #b91c1c;
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #27272a;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+    }
+
     /* Sezione Lap Timer (Best / Last Lap) */
     .lap-stats {
       display: grid;
@@ -318,7 +329,7 @@
     }
 
     .history-table-container {
-      max-height: 200px;
+      max-height: 250px;
       overflow-y: auto;
     }
 
@@ -347,6 +358,13 @@
       text-align: center;
       color: var(--text-muted);
       padding: 16px 0;
+    }
+
+    .history-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 4px;
     }
 
     /* Control Panel & Controls */
@@ -398,7 +416,6 @@
 
   <div class="app-container">
     
-    <!-- Header -->
     <header>
       <h1>DisplayWolf</h1>
       <div class="header-actions">
@@ -410,13 +427,11 @@
       </div>
     </header>
 
-    <!-- Connessione -->
     <div class="btn-group">
       <button id="btn-connect" onclick="connectBLE()">Connetti BLE</button>
       <button id="btn-disconnect" onclick="disconnectBLE()" class="btn-danger" disabled>Disconnetti</button>
     </div>
 
-    <!-- Sezione Lap Timer -->
     <div class="lap-stats">
       <div class="lap-card">
         <div class="lap-label">Last Lap</div>
@@ -428,7 +443,6 @@
       </div>
     </div>
 
-    <!-- Indicatore Visuale Piega Istantanea -->
     <div class="gauge-card">
       <div class="gauge-title">Inclinazione Corrente</div>
       <div class="visual-gauge-container">
@@ -442,7 +456,6 @@
       </div>
     </div>
 
-    <!-- Massimi SX / DX -->
     <div class="split-stats">
       <div class="stat-card">
         <div class="stat-label">Max Sinistra (SX)</div>
@@ -454,302 +467,6 @@
       </div>
     </div>
 
-    <!-- Storico Ultimi Giri -->
     <div class="history-card">
-      <div class="gauge-title">Storico Ultimi Giri</div>
+      <div class="gauge-title">Storico Ultimi Giri (Max 30)</div>
       <div class="history-table-container">
-        <table id="laps-history-table">
-          <thead>
-            <tr>
-              <th>Giro</th>
-              <th>Tempo</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr class="empty-row"><td colspan="2">Nessun giro registrato</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Invio Parametri e Comandi -->
-    <div class="control-card">
-      <div class="gauge-title">Invia Comando</div>
-      <div class="input-wrapper">
-        <input type="text" id="cmd-input" placeholder="Invia comando..." disabled />
-        <button id="btn-send" onclick="sendCommand()" disabled>Invia</button>
-      </div>
-    </div>
-
-    <!-- Terminale Log -->
-    <div id="log-output" class="log-card">In attesa della connessione...</div>
-
-  </div>
-
-  <script>
-    // UUID DisplayWolf
-    const SERVICE_UUID    = '12345678-1234-1234-1234-123456789abc';
-    const CHAR_READ_UUID  = '87654321-4321-4321-4321-cba987654321'; 
-    const CHAR_WRITE_UUID = '87654321-4321-4321-4321-cba987654321';
-
-    let bleDevice = null;
-    let writeChar = null;
-    let isAutoReconnecting = false;
-
-    let maxLeft = 0;
-    let maxRight = 0;
-    let lapsHistory = []; // max 10 giri
-
-    function log(text) {
-      const logEl = document.getElementById('log-output');
-      logEl.innerText += '\n> ' + text;
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-
-    function addLapToHistory(lapTimeString) {
-      if (!lapTimeString || lapTimeString === "--:--.--" || lapTimeString === "00:00.000") return;
-
-      // Evita duplicati consecutivi
-      if (lapsHistory.length > 0 && lapsHistory[0] === lapTimeString) {
-        return;
-      }
-
-      lapsHistory.unshift(lapTimeString);
-
-      if (lapsHistory.length > 10) {
-        lapsHistory.pop();
-      }
-
-      updateLapsHistoryUI();
-      saveLocalData();
-    }
-
-    function updateLapsHistoryUI() {
-      const tbody = document.querySelector('#laps-history-table tbody');
-      if (!tbody) return;
-
-      if (lapsHistory.length === 0) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="2">Nessun giro registrato</td></tr>';
-        return;
-      }
-
-      let html = '';
-      lapsHistory.forEach((lap, index) => {
-        const lapNumber = lapsHistory.length - index;
-        html += `<tr>
-          <td>Giro ${lapNumber}</td>
-          <td><strong>${lap}</strong></td>
-        </tr>`;
-      });
-      tbody.innerHTML = html;
-    }
-
-    async function connectBLE() {
-      if (!navigator.bluetooth) {
-        alert("Web Bluetooth non è supportato. Su iOS usa l'app Bluefy!");
-        return;
-      }
-
-      try {
-        log("Ricerca del dispositivo...");
-        bleDevice = await navigator.bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: [SERVICE_UUID]
-        });
-
-        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-        await performConnection();
-
-      } catch (err) {
-        log("Errore: " + err.message);
-      }
-    }
-
-    async function performConnection() {
-      try {
-        log("Connessione in corso a " + bleDevice.name + "...");
-        const server = await bleDevice.gatt.connect();
-
-        log("Ottengo il servizio...");
-        const service = await server.getPrimaryService(SERVICE_UUID);
-
-        const readChar = await service.getCharacteristic(CHAR_READ_UUID);
-        await readChar.startNotifications();
-        readChar.addEventListener('characteristicvaluechanged', handleDataReceived);
-
-        writeChar = await service.getCharacteristic(CHAR_WRITE_UUID);
-
-        isAutoReconnecting = false;
-        setUIConnected(true);
-        log("Connesso con successo!");
-      } catch (err) {
-        log("Connessione fallita: " + err.message);
-        if (isAutoReconnecting) {
-          setTimeout(performConnection, 3000);
-        }
-      }
-    }
-
-    function handleDataReceived(event) {
-      const decoder = new TextDecoder('utf-8');
-      const rawData = decoder.decode(event.target.value).trim();
-      log("Ricevuto: " + rawData);
-
-      // 1. Prova prima a fare il parse come JSON
-      try {
-        const data = JSON.parse(rawData);
-
-        // Gestione Max DX e Max SX
-        if (data.maxDX !== undefined) {
-          maxRight = data.maxDX;
-          document.getElementById('max-right').innerText = maxRight;
-        }
-        if (data.maxSX !== undefined) {
-          maxLeft = data.maxSX;
-          document.getElementById('max-left').innerText = maxLeft;
-        }
-
-        // Gestione Tempi sul Giro (lastLap e bestLap)
-        if (data.lastLap) {
-          document.getElementById('last-lap').innerText = data.lastLap;
-          addLapToHistory(data.lastLap);
-        }
-        if (data.bestLap) {
-          document.getElementById('best-lap').innerText = data.bestLap;
-        }
-
-        // Gestione Inclinazione/Piega Istantanea
-        if (data.lean !== undefined) {
-          updateGauge(data.lean);
-        }
-
-        saveLocalData();
-        return;
-      } catch (e) {
-        // Se non è un JSON, prosegui con i controlli fallback
-      }
-
-      // 2. Gestione dei messaggi legacy o comandi singoli
-      if (rawData.startsWith("LAP:")) {
-        const timeStr = rawData.replace("LAP:", "");
-        document.getElementById('last-lap').innerText = timeStr;
-        addLapToHistory(timeStr);
-        log("Giro ricevuto: " + timeStr);
-        return;
-      }
-
-      // 3. Fallback per valore numerico singolo dell'inclinazione
-      const parsedValue = parseFloat(rawData);
-      if (!isNaN(parsedValue)) {
-        updateGauge(parsedValue);
-      }
-    }
-
-    function updateGauge(val) {
-      document.getElementById('lean-value').innerText = Math.abs(val);
-
-      const clamped = Math.max(-60, Math.min(60, val));
-      document.getElementById('gauge-needle').style.transform = `translateX(-50%) rotate(${clamped}deg)`;
-
-      if (val < 0 && Math.abs(val) > maxLeft) {
-        maxLeft = Math.abs(val);
-        document.getElementById('max-left').innerText = maxLeft;
-        saveLocalData();
-      } else if (val > 0 && val > maxRight) {
-        maxRight = val;
-        document.getElementById('max-right').innerText = maxRight;
-        saveLocalData();
-      }
-    }
-
-    async function sendCommand() {
-      const input = document.getElementById('cmd-input');
-      if (input.value && writeChar) {
-        try {
-          const encoder = new TextEncoder();
-          await writeChar.writeValue(encoder.encode(input.value));
-          log("Inviato: " + input.value);
-          input.value = '';
-        } catch (err) {
-          log("Errore invio: " + err.message);
-        }
-      }
-    }
-
-    async function disconnectBLE() {
-      isAutoReconnecting = false;
-      if (bleDevice && bleDevice.gatt.connected) {
-        bleDevice.gatt.disconnect();
-      }
-    }
-
-    function onDisconnected() {
-      setUIConnected(false);
-      log("Connessione persa.");
-
-      if (bleDevice) {
-        isAutoReconnecting = true;
-        document.getElementById('status-dot').className = 'status-dot reconnecting';
-        document.getElementById('status-text').innerText = 'Riconnessione...';
-        log("Tentativo di auto-riconnessione in corso...");
-        setTimeout(performConnection, 2000);
-      }
-    }
-
-    function setUIConnected(connected) {
-      document.getElementById('status-dot').className = connected ? 'status-dot connected' : 'status-dot';
-      document.getElementById('status-text').innerText = connected ? 'Connesso' : 'Disconnesso';
-
-      document.getElementById('btn-connect').disabled = connected;
-      document.getElementById('btn-disconnect').disabled = !connected;
-      document.getElementById('cmd-input').disabled = !connected;
-      document.getElementById('btn-send').disabled = !connected;
-
-      if (!connected && !isAutoReconnecting) {
-        document.getElementById('lean-value').innerText = '0';
-        document.getElementById('gauge-needle').style.transform = 'translateX(-50%) rotate(0deg)';
-      }
-    }
-
-    function saveLocalData() {
-      localStorage.setItem('displaywolf_data', JSON.stringify({
-        left: maxLeft,
-        right: maxRight,
-        bestLap: document.getElementById('best-lap').innerText,
-        lastLap: document.getElementById('last-lap').innerText,
-        lapsHistory: lapsHistory
-      }));
-    }
-
-    function loadLocalData() {
-      const saved = localStorage.getItem('displaywolf_data');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        maxLeft = parsed.left || 0;
-        maxRight = parsed.right || 0;
-        lapsHistory = parsed.lapsHistory || [];
-
-        document.getElementById('max-left').innerText = maxLeft;
-        document.getElementById('max-right').innerText = maxRight;
-        if (parsed.lastLap) document.getElementById('last-lap').innerText = parsed.lastLap;
-        if (parsed.bestLap) document.getElementById('best-lap').innerText = parsed.bestLap;
-
-        updateLapsHistoryUI();
-      }
-    }
-
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        }
-      }
-    }
-
-    // Carica i dati salvati
-    loadLocalData();
-  </script>
-</body>
-</html>
