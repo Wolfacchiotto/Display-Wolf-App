@@ -599,13 +599,43 @@
     }
 
     function copyReportToClipboard() {
-      const text = document.getElementById('modal-report-text').innerText;
-      navigator.clipboard.writeText(text).then(() => {
+  const textarea = document.getElementById('modal-report-text');
+
+  try {
+    // 1. Seleziona il testo all'interno della textarea
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, 99999); // Importante per dispositivi mobili / iOS
+
+    // 2. Prova prima con la Clipboard API moderna
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(textarea.value).then(() => {
         alert("Report copiato negli appunti!");
       }).catch(() => {
-        log("Errore nella copia negli appunti.");
+        // Fallback manuale in caso di errore dell'API
+        fallbackCopy(textarea);
       });
+    } else {
+      // 3. Fallback classico per browser vecchi o connessioni non HTTPS
+      fallbackCopy(textarea);
     }
+  } catch (err) {
+    log("Errore nella copia negli appunti: " + err.message);
+  }
+}
+
+function fallbackCopy(textareaElement) {
+  try {
+    const successful = document.execCommand('copy');
+    if (successful) {
+      alert("Report copiato negli appunti!");
+    } else {
+      alert("Impossibile copiare automaticamente. Seleziona il testo e copialo manualmente.");
+    }
+  } catch (err) {
+    alert("Errore nella copia. Seleziona il testo e copialo manualmente.");
+  }
+}
 
     function closeModal() {
       document.getElementById('report-modal').style.display = 'none';
