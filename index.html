@@ -654,26 +654,35 @@ function fallbackCopy(textareaElement) {
       document.getElementById('report-modal').style.display = 'none';
     }
 
-    async function connectBLE() {
-      if (!navigator.bluetooth) {
-        alert("Web Bluetooth non è supportato su questo browser.");
-        return;
-      }
-
-      try {
-        log("Ricerca del dispositivo...");
-        bleDevice = await navigator.bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: [SERVICE_UUID]
-        });
-
-        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
-        await performConnection();
-
-      } catch (err) {
-        log("Errore: " + err.message);
-      }
+    async function disconnectBLE() {
+  isAutoReconnecting = false;
+  
+  if (bleDevice) {
+    const deviceToDisconnect = bleDevice;
+    bleDevice = null; // Azzeriamo la variabile PRIMA di disconnettere per bloccare il riconnect
+    
+    if (deviceToDisconnect.gatt && deviceToDisconnect.gatt.connected) {
+      deviceToDisconnect.gatt.disconnect();
     }
+  }
+  
+  setUIConnected(false);
+  log("Disconnessione manuale effettuata.");
+}
+
+function onDisconnected() {
+  setUIConnected(false);
+
+  // Tenta la riconnessione automatica SOLO SE non è stata una disconnessione manuale (bleDevice != null)
+  if (bleDevice && isAutoReconnecting) {
+    document.getElementById('status-dot').className = 'status-dot reconnecting';
+    document.getElementById('status-text').innerText = 'Riconnessione...';
+    log("Connessione persa. Tentativo di auto-riconnessione in corso...");
+    setTimeout(performConnection, 2000);
+  } else {
+    log("Dispositivo disconnesso.");
+  }
+}
 
     async function performConnection() {
       try {
