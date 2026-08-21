@@ -485,6 +485,18 @@
 
   </div>
 
+  <!-- Modal Report -->
+  <div id="report-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:999; align-items:center; justify-content:center; padding:15px;">
+    <div style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:16px; padding:16px; width:100%; max-width:400px; display:flex; flex-direction:column; gap:12px;">
+      <h3 style="color:var(--text-main); font-size:1rem; text-align:center;">Report Telemetria</h3>
+      <textarea id="modal-report-text" readonly style="width:100%; height:220px; background:#000; color:var(--success); font-family:monospace; font-size:0.75rem; border:1px solid var(--border-color); border-radius:10px; padding:10px; resize:none;"></textarea>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <button onclick="copyReportToClipboard()" style="background:var(--accent-color);">Copia Testo</button>
+        <button onclick="closeModal()" class="btn-danger">Chiudi</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const SERVICE_UUID    = '12345678-1234-1234-1234-123456789abc';
     const CHAR_READ_UUID  = '87654321-4321-4321-4321-cba987654321'; 
@@ -548,12 +560,10 @@
       log("Storico giri azzerato.");
     }
 
-    // Funzione di Download Diretto (Zero Pop-Up, Funziona Ovunque)
     function downloadReportTxt() {
       try {
         const now = new Date();
         const dateStr = now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT');
-
         const bestLap = document.getElementById('best-lap').innerText;
         const lastLap = document.getElementById('last-lap').innerText;
 
@@ -578,19 +588,27 @@
         }
         content += `========================================\n`;
 
-        // Creazione file e download forzato tramite browser
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `DisplayWolf_Report_${now.toISOString().slice(0,10)}.txt`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Mostra a schermo nel modal
+        document.getElementById('modal-report-text').innerText = content;
+        document.getElementById('report-modal').style.display = 'flex';
 
-        log("Report scaricato correttamente!");
+        log("Report generato a schermo!");
       } catch (err) {
-        log("Errore salvataggio: " + err.message);
+        log("Errore generazione report: " + err.message);
       }
+    }
+
+    function copyReportToClipboard() {
+      const text = document.getElementById('modal-report-text').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        alert("Report copiato negli appunti!");
+      }).catch(() => {
+        log("Errore nella copia negli appunti.");
+      });
+    }
+
+    function closeModal() {
+      document.getElementById('report-modal').style.display = 'none';
     }
 
     async function connectBLE() {
