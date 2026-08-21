@@ -561,42 +561,55 @@
     }
 
     function downloadReportTxt() {
-      try {
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('it-IT') + ' ' + now.toLocaleTimeString('it-IT');
-        const bestLap = document.getElementById('best-lap').innerText;
-        const lastLap = document.getElementById('last-lap').innerText;
+  try {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('it-IT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    const timeStr = now.toLocaleTimeString('it-IT', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
 
-        let content = `========================================\n`;
-        content += `    DISPLAYWOLF TELEMETRY REPORT\n`;
-        content += `========================================\n`;
-        content += `Data: ${dateStr}\n\n`;
-        content += `--- RIEPILOGO PRESTAZIONI ---\n`;
-        content += `Best Lap                  : ${bestLap}\n`;
-        content += `Last Lap                  : ${lastLap}\n`;
-        content += `Max Angolo Piega Sinistra : ${maxLeft}°\n`;
-        content += `Max Angolo Piega Destra   : ${maxRight}°\n\n`;
-        content += `--- STORICO GIRI ---\n`;
+    const bestLap = document.getElementById('best-lap').innerText;
+    const lastLap = document.getElementById('last-lap').innerText;
 
-        if (lapsHistory.length === 0) {
-          content += `Nessun giro registrato.\n`;
-        } else {
-          lapsHistory.forEach((lap, index) => {
-            const lapNumber = lapsHistory.length - index;
-            content += `Giro ${lapNumber.toString().padStart(2, ' ')} : ${lap}\n`;
-          });
-        }
-        content += `========================================\n`;
+    let content = `🏁 DISPLAYWOLF TELEMETRY REPORT\n`;
+    content += `📅 ${dateStr}   |   🕒 ${timeStr}\n\n`;
+    content += `========================================\n\n`;
+    
+    content += `📊 RIEPILOGO PRESTAZIONI\n\n`;
+    content += `  🏆 Best Lap   :  ${bestLap}\n\n`;
+    content += `  ⏱️ Last Lap   :  ${lastLap}\n\n`;
+    content += `  📐 Max SX     :  ${maxLeft}°\n\n`;
+    content += `  📐 Max DX     :  ${maxRight}°\n\n`;
 
-        // Mostra a schermo nel modal
-        document.getElementById('modal-report-text').innerText = content;
-        document.getElementById('report-modal').style.display = 'flex';
+    content += `========================================\n\n`;
+    content += `📋 STORICO GIRI (${lapsHistory.length})\n\n`;
 
-        log("Report generato a schermo!");
-      } catch (err) {
-        log("Errore generazione report: " + err.message);
-      }
+    if (lapsHistory.length === 0) {
+      content += `  Nessun giro registrato.\n\n`;
+    } else {
+      lapsHistory.forEach((lap, index) => {
+        const lapNum = (lapsHistory.length - index).toString().padStart(2, '0');
+        const isBest = (lap === bestLap && bestLap !== '--:--.--') ? ' ⭐ (BEST)' : '';
+        content += `  • Giro ${lapNum}   ──>   ${lap}${isBest}\n\n`;
+      });
     }
+
+    content += `========================================\n`;
+
+    // Mostra a schermo nel modal
+    document.getElementById('modal-report-text').value = content;
+    document.getElementById('report-modal').style.display = 'flex';
+
+    log("Report generato a schermo!");
+  } catch (err) {
+    log("Errore generazione report: " + err.message);
+  }
+}
 
     function copyReportToClipboard() {
   const textarea = document.getElementById('modal-report-text');
