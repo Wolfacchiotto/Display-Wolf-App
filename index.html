@@ -402,7 +402,7 @@
 <body>
 
   <div class="app-container">
-    
+
     <header>
       <h1>DisplayWolf</h1>
       <div class="header-actions">
@@ -451,6 +451,17 @@
       <div class="stat-card">
         <div class="stat-label">Max Destra (DX)</div>
         <div class="stat-value"><span id="max-right">0</span>°</div>
+      </div>
+    </div>
+
+    <!-- Nuova sezione dedicata a Temperatura e Sincronizzazione Ora -->
+    <div class="split-stats">
+      <div class="stat-card">
+        <div class="stat-label">Temperatura</div>
+        <div class="stat-value"><span id="temp-value">--</span>°C</div>
+      </div>
+      <div class="stat-card" style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+        <button class="btn-save" style="margin: 0; padding: 10px; font-size: 0.8rem;" onclick="syncPhoneDateTime()" id="btn-sync" disabled>🔄 Sync Ora/Data</button>
       </div>
     </div>
 
@@ -518,16 +529,10 @@
 
     function addLapToHistory(lapTimeString) {
       if (!lapTimeString || lapTimeString === "--:--.--" || lapTimeString === "00:00.000") return;
-
-      if (lapsHistory.length > 0 && lapsHistory[0] === lapTimeString) {
-        return;
-      }
+      if (lapsHistory.length > 0 && lapsHistory[0] === lapTimeString) return;
 
       lapsHistory.unshift(lapTimeString);
-
-      if (lapsHistory.length > 30) {
-        lapsHistory.pop();
-      }
+      if (lapsHistory.length > 30) lapsHistory.pop();
 
       updateLapsHistoryUI();
       saveLocalData();
@@ -563,29 +568,21 @@
     function downloadReportTxt() {
       try {
         const now = new Date();
-        const dateStr = now.toLocaleDateString('it-IT', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        });
-        const timeStr = now.toLocaleTimeString('it-IT', {
-          hour: '2-digit',
-          minute: '2-digit'
-        });
+        const dateStr = now.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timeStr = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
         const bestLap = document.getElementById('best-lap').innerText;
         const lastLap = document.getElementById('last-lap').innerText;
 
         let content = `🏁 DISPLAYWOLF TELEMETRY REPORT\n`;
-        content += `📅 ${dateStr}   |   🕒 ${timeStr}\n\n`;
+        content += `📅 ${dateStr}    |    🕒 ${timeStr}\n\n`;
         content += `========================================\n\n`;
-        
         content += `📊 RIEPILOGO PRESTAZIONI\n\n`;
-        content += `  🏆 Best Lap   :  ${bestLap}\n\n`;
-        content += `  ⏱️ Last Lap   :  ${lastLap}\n\n`;
-        content += `  📐 Max SX     :  ${maxLeft}°\n\n`;
-        content += `  📐 Max DX     :  ${maxRight}°\n\n`;
-
+        content += `  🏆 Best Lap    :  ${bestLap}\n\n`;
+        content += `  ⏱️ Last Lap    :  ${lastLap}\n\n`;
+        content += `  📐 Max SX      :  ${maxLeft}°\n\n`;
+        content += `  📐 Max DX      :  ${maxRight}°\n\n`;
+        content += `  🌡️ Temperatura :  ${document.getElementById('temp-value').innerText}°C\n\n`;
         content += `========================================\n\n`;
         content += `📋 STORICO GIRI (${lapsHistory.length})\n\n`;
 
@@ -598,12 +595,10 @@
             content += `  • Giro ${lapNum}   ──>   ${lap}${isBest}\n\n`;
           });
         }
-
         content += `========================================\n`;
 
         document.getElementById('modal-report-text').value = content;
         document.getElementById('report-modal').style.display = 'flex';
-
         log("Report generato a schermo!");
       } catch (err) {
         log("Errore generazione report: " + err.message);
@@ -612,36 +607,27 @@
 
     function copyReportToClipboard() {
       const textarea = document.getElementById('modal-report-text');
-
       try {
         textarea.focus();
         textarea.select();
-        textarea.setSelectionRange(0, 99999);
-
         if (navigator.clipboard && window.isSecureContext) {
           navigator.clipboard.writeText(textarea.value).then(() => {
             alert("Report copiato negli appunti!");
-          }).catch(() => {
-            fallbackCopy(textarea);
-          });
+          }).catch(() => fallbackCopy(textarea));
         } else {
           fallbackCopy(textarea);
         }
       } catch (err) {
-        log("Errore nella copia negli appunti: " + err.message);
+        log("Errore copia appunti: " + err.message);
       }
     }
 
     function fallbackCopy(textareaElement) {
       try {
-        const successful = document.execCommand('copy');
-        if (successful) {
-          alert("Report copiato negli appunti!");
-        } else {
-          alert("Impossibile copiare automaticamente. Seleziona il testo e copialo manualmente.");
-        }
+        if (document.execCommand('copy')) alert("Report copiato negli appunti!");
+        else alert("Impossibile copiare automaticamente.");
       } catch (err) {
-        alert("Errore nella copia. Seleziona il testo e copialo manualmente.");
+        alert("Errore nella copia.");
       }
     }
 
@@ -654,7 +640,6 @@
         alert("Web Bluetooth non è supportato su questo browser.");
         return;
       }
-
       try {
         log("Ricerca del dispositivo...");
         bleDevice = await navigator.bluetooth.requestDevice({
@@ -664,7 +649,6 @@
 
         bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
         await performConnection();
-
       } catch (err) {
         log("Errore: " + err.message);
       }
@@ -674,7 +658,6 @@
       try {
         log("Connessione in corso a " + bleDevice.name + "...");
         const server = await bleDevice.gatt.connect();
-
         const service = await server.getPrimaryService(SERVICE_UUID);
 
         const readChar = await service.getCharacteristic(CHAR_READ_UUID);
@@ -694,12 +677,38 @@
       }
     }
 
+    // Funzione per sincronizzare data e ora del cellulare verso il display
+    async function syncPhoneDateTime() {
+      if (!writeChar) {
+        alert("Dispositivo non connesso!");
+        return;
+      }
+
+      const now = new Date();
+      const payload = JSON.stringify({
+        cmd: "sync",
+        h: now.getHours(),
+        m: now.getMinutes(),
+        s: now.getSeconds(),
+        d: now.getDate(),
+        mo: now.getMonth() + 1,
+        y: now.getFullYear()
+      });
+
+      try {
+        const encoder = new TextEncoder();
+        await writeChar.writeValue(encoder.encode(payload));
+        log("Ora e data inviate al display: " + payload);
+      } catch (err) {
+        log("Errore invio sync ora: " + err.message);
+      }
+    }
+
     function handleDataReceived(event) {
       const decoder = new TextDecoder('utf-8');
       const rawData = decoder.decode(event.target.value).trim();
       log("Ricevuto: " + rawData);
 
-      // 1. Prova a decodificare come JSON
       try {
         const data = JSON.parse(rawData);
 
@@ -711,7 +720,6 @@
           maxLeft = Math.round(data.maxSX);
           document.getElementById('max-left').innerText = maxLeft;
         }
-
         if (data.lastLap) {
           document.getElementById('last-lap').innerText = data.lastLap;
           addLapToHistory(data.lastLap);
@@ -719,41 +727,27 @@
         if (data.bestLap) {
           document.getElementById('best-lap').innerText = data.bestLap;
         }
-
-        // Controllo esplicito su undefined/null per evitare che 0 sia trattato come false
         if (data.lean !== undefined && data.lean !== null) {
           updateGauge(Number(data.lean));
-        } else if (data.angle !== undefined && data.angle !== null) {
-          updateGauge(Number(data.angle));
-        } else if (data.inclinazione !== undefined && data.inclinazione !== null) {
-          updateGauge(Number(data.inclinazione));
+        }
+        // Lettura temperatura dal JSON
+        if (data.temp !== undefined && data.temp !== null) {
+          document.getElementById('temp-value').innerText = Number(data.temp).toFixed(1);
         }
 
         saveLocalData();
         return;
       } catch (e) {
-        // Se non è JSON, prosegue con i controlli raw
+        // Se non è JSON, fallback su stringhe grezze
       }
 
-      // 2. Controllo stringhe con prefisso
       if (rawData.startsWith("LAP:")) {
         const timeStr = rawData.replace("LAP:", "").trim();
         document.getElementById('last-lap').innerText = timeStr;
         addLapToHistory(timeStr);
-        log("Giro ricevuto: " + timeStr);
         return;
       }
 
-      if (rawData.startsWith("LEAN:") || rawData.startsWith("ANGLE:")) {
-        const valStr = rawData.replace(/(LEAN:|ANGLE:)/, "").trim();
-        const val = parseFloat(valStr);
-        if (!isNaN(val)) {
-          updateGauge(val);
-        }
-        return;
-      }
-
-      // 3. Fallback: stringa con solo valore numerico (es: "-15.4" o "22")
       const parsedValue = parseFloat(rawData);
       if (!isNaN(parsedValue)) {
         updateGauge(parsedValue);
@@ -762,15 +756,12 @@
 
     function updateGauge(val) {
       if (isNaN(val)) return;
-
       const roundedVal = Math.round(val);
       document.getElementById('lean-value').innerText = Math.abs(roundedVal);
 
-      // Limita l'escursione visiva dell'ago tra -60° e +60°
       const clamped = Math.max(-60, Math.min(60, roundedVal));
       document.getElementById('gauge-needle').style.transform = `translateX(-50%) rotate(${clamped}deg)`;
 
-      // Calcola e aggiorna i picchi massimi
       const absVal = Math.abs(roundedVal);
       if (roundedVal < 0 && absVal > maxLeft) {
         maxLeft = absVal;
@@ -799,27 +790,22 @@
 
     async function disconnectBLE() {
       isAutoReconnecting = false;
-      
       if (bleDevice) {
         const deviceToDisconnect = bleDevice;
         bleDevice = null;
-        
         if (deviceToDisconnect.gatt && deviceToDisconnect.gatt.connected) {
           deviceToDisconnect.gatt.disconnect();
         }
       }
-      
       setUIConnected(false);
       log("Disconnessione manuale effettuata.");
     }
 
     function onDisconnected() {
       setUIConnected(false);
-
       if (bleDevice && isAutoReconnecting) {
         document.getElementById('status-dot').className = 'status-dot reconnecting';
         document.getElementById('status-text').innerText = 'Riconnessione...';
-        log("Connessione persa. Tentativo di auto-riconnessione in corso...");
         setTimeout(performConnection, 2000);
       } else {
         log("Dispositivo disconnesso.");
@@ -834,10 +820,12 @@
       document.getElementById('btn-disconnect').disabled = !connected;
       document.getElementById('cmd-input').disabled = !connected;
       document.getElementById('btn-send').disabled = !connected;
+      document.getElementById('btn-sync').disabled = !connected;
 
       if (!connected && !isAutoReconnecting) {
         document.getElementById('lean-value').innerText = '0';
         document.getElementById('gauge-needle').style.transform = 'translateX(-50%) rotate(0deg)';
+        document.getElementById('temp-value').innerText = '--';
       }
     }
 
@@ -872,9 +860,7 @@
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(() => {});
       } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        }
+        if (document.exitFullscreen) document.exitFullscreen();
       }
     }
 
