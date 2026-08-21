@@ -601,7 +601,6 @@
 
         content += `========================================\n`;
 
-        // Mostra a schermo nel modal
         document.getElementById('modal-report-text').value = content;
         document.getElementById('report-modal').style.display = 'flex';
 
@@ -700,15 +699,16 @@
       const rawData = decoder.decode(event.target.value).trim();
       log("Ricevuto: " + rawData);
 
+      // 1. Prova a decodificare come JSON
       try {
         const data = JSON.parse(rawData);
 
-        if (data.maxDX !== undefined) {
-          maxRight = data.maxDX;
+        if (data.maxDX !== undefined && data.maxDX !== null) {
+          maxRight = Math.round(data.maxDX);
           document.getElementById('max-right').innerText = maxRight;
         }
-        if (data.maxSX !== undefined) {
-          maxLeft = data.maxSX;
+        if (data.maxSX !== undefined && data.maxSX !== null) {
+          maxLeft = Math.round(data.maxSX);
           document.getElementById('max-left').innerText = maxLeft;
         }
 
@@ -720,23 +720,40 @@
           document.getElementById('best-lap').innerText = data.bestLap;
         }
 
-        if (data.lean !== undefined) {
-          updateGauge(data.lean);
+        // Controllo esplicito su undefined/null per evitare che 0 sia trattato come false
+        if (data.lean !== undefined && data.lean !== null) {
+          updateGauge(Number(data.lean));
+        } else if (data.angle !== undefined && data.angle !== null) {
+          updateGauge(Number(data.angle));
+        } else if (data.inclinazione !== undefined && data.inclinazione !== null) {
+          updateGauge(Number(data.inclinazione));
         }
 
         saveLocalData();
         return;
       } catch (e) {
+        // Se non è JSON, prosegue con i controlli raw
       }
 
+      // 2. Controllo stringhe con prefisso
       if (rawData.startsWith("LAP:")) {
-        const timeStr = rawData.replace("LAP:", "");
+        const timeStr = rawData.replace("LAP:", "").trim();
         document.getElementById('last-lap').innerText = timeStr;
         addLapToHistory(timeStr);
         log("Giro ricevuto: " + timeStr);
         return;
       }
 
+      if (rawData.startsWith("LEAN:") || rawData.startsWith("ANGLE:")) {
+        const valStr = rawData.replace(/(LEAN:|ANGLE:)/, "").trim();
+        const val = parseFloat(valStr);
+        if (!isNaN(val)) {
+          updateGauge(val);
+        }
+        return;
+      }
+
+      // 3. Fallback: stringa con solo valore numerico (es: "-15.4" o "22")
       const parsedValue = parseFloat(rawData);
       if (!isNaN(parsedValue)) {
         updateGauge(parsedValue);
@@ -744,17 +761,23 @@
     }
 
     function updateGauge(val) {
-      document.getElementById('lean-value').innerText = Math.abs(val);
+      if (isNaN(val)) return;
 
-      const clamped = Math.max(-60, Math.min(60, val));
+      const roundedVal = Math.round(val);
+      document.getElementById('lean-value').innerText = Math.abs(roundedVal);
+
+      // Limita l'escursione visiva dell'ago tra -60° e +60°
+      const clamped = Math.max(-60, Math.min(60, roundedVal));
       document.getElementById('gauge-needle').style.transform = `translateX(-50%) rotate(${clamped}deg)`;
 
-      if (val < 0 && Math.abs(val) > maxLeft) {
-        maxLeft = Math.abs(val);
+      // Calcola e aggiorna i picchi massimi
+      const absVal = Math.abs(roundedVal);
+      if (roundedVal < 0 && absVal > maxLeft) {
+        maxLeft = absVal;
         document.getElementById('max-left').innerText = maxLeft;
         saveLocalData();
-      } else if (val > 0 && val > maxRight) {
-        maxRight = val;
+      } else if (roundedVal > 0 && roundedVal > maxRight) {
+        maxRight = roundedVal;
         document.getElementById('max-right').innerText = maxRight;
         saveLocalData();
       }
@@ -779,7 +802,7 @@
       
       if (bleDevice) {
         const deviceToDisconnect = bleDevice;
-        bleDevice = null; // Azzeriamo la variabile PRIMA di disconnettere per evitare il reconnect automatico
+        bleDevice = null;
         
         if (deviceToDisconnect.gatt && deviceToDisconnect.gatt.connected) {
           deviceToDisconnect.gatt.disconnect();
@@ -793,7 +816,6 @@
     function onDisconnected() {
       setUIConnected(false);
 
-      // Tenta la riconnessione automatica SOLO SE non è stata una disconnessione manuale (bleDevice != null)
       if (bleDevice && isAutoReconnecting) {
         document.getElementById('status-dot').className = 'status-dot reconnecting';
         document.getElementById('status-text').innerText = 'Riconnessione...';
