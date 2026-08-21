@@ -61,12 +61,6 @@
       color: var(--text-main);
     }
 
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
     .status-badge {
       display: flex;
       align-items: center;
@@ -95,16 +89,6 @@
     .status-dot.reconnecting {
       background-color: #f59e0b;
       box-shadow: 0 0 8px #f59e0b;
-    }
-
-    .btn-icon {
-      background: #27272a;
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 6px 10px;
-      font-size: 0.8rem;
-      color: var(--text-main);
-      cursor: pointer;
     }
 
     .btn-group {
@@ -139,9 +123,10 @@
       transform: none;
     }
 
+    /* Ora btn-danger è rosso di base, ma diventa grigio quando disabilitato */
     .btn-danger {
-      background: #3f3f46;
-      color: var(--text-main);
+      background: var(--danger);
+      color: #fff;
     }
 
     .btn-reset {
@@ -405,12 +390,9 @@
 
     <header>
       <h1>DisplayWolf</h1>
-      <div class="header-actions">
-        <button class="btn-icon" onclick="toggleFullscreen()">⛶ Fullscreen</button>
-        <div class="status-badge">
-          <div id="status-dot" class="status-dot"></div>
-          <span id="status-text">Disconnesso</span>
-        </div>
+      <div class="status-badge">
+        <div id="status-dot" class="status-dot"></div>
+        <span id="status-text">Disconnesso</span>
       </div>
     </header>
 
@@ -454,7 +436,6 @@
       </div>
     </div>
 
-    <!-- Nuova sezione dedicata a Temperatura e Sincronizzazione Ora -->
     <div class="split-stats">
       <div class="stat-card">
         <div class="stat-label">Temperatura</div>
@@ -496,7 +477,6 @@
 
   </div>
 
-  <!-- Modal Report -->
   <div id="report-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:999; align-items:center; justify-content:center; padding:15px;">
     <div style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:16px; padding:16px; width:100%; max-width:400px; display:flex; flex-direction:column; gap:12px;">
       <h3 style="color:var(--text-main); font-size:1rem; text-align:center;">Report Telemetria</h3>
@@ -677,7 +657,6 @@
       }
     }
 
-    // Funzione per sincronizzare data e ora del cellulare verso il display
     async function syncPhoneDateTime() {
       if (!writeChar) {
         alert("Dispositivo non connesso!");
@@ -730,7 +709,6 @@
         if (data.lean !== undefined && data.lean !== null) {
           updateGauge(Number(data.lean));
         }
-        // Lettura temperatura dal JSON
         if (data.temp !== undefined && data.temp !== null) {
           document.getElementById('temp-value').innerText = Number(data.temp).toFixed(1);
         }
@@ -738,7 +716,6 @@
         saveLocalData();
         return;
       } catch (e) {
-        // Se non è JSON, fallback su stringhe grezze
       }
 
       if (rawData.startsWith("LAP:")) {
@@ -853,14 +830,6 @@
         if (parsed.bestLap) document.getElementById('best-lap').innerText = parsed.bestLap;
 
         updateLapsHistoryUI();
-      }
-    }
-
-    function toggleFullscreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else {
-        if (document.exitFullscreen) document.exitFullscreen();
       }
     }
 
